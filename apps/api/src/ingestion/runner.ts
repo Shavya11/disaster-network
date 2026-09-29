@@ -1,12 +1,16 @@
 import { sql } from '../lib/db.js';
+import { createFirmsAdapter } from './adapters/firms.js';
 import { gdacsAdapter } from './adapters/gdacs.js';
 import { openMeteoAdapter } from './adapters/openMeteo.js';
 import { usgsAdapter } from './adapters/usgs.js';
 import type { FeedAdapter, NormalizedSignal } from './types.js';
 
 // Adding a data source = write an adapter and register it here (FR-22).
+// FIRMS is enabled only when a (free) key is configured.
+const firmsKey = process.env.FIRMS_MAP_KEY;
 export const ADAPTERS: Record<string, FeedAdapter> = Object.fromEntries(
-  [usgsAdapter, openMeteoAdapter, gdacsAdapter].map((a) => [a.source, a]),
+  [usgsAdapter, openMeteoAdapter, gdacsAdapter, ...(firmsKey ? [createFirmsAdapter(firmsKey)] : [])]
+    .map((a) => [a.source, a]),
 );
 
 export interface FeedRunResult {

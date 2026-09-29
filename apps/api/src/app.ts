@@ -5,6 +5,8 @@ import { env } from './config/env.js';
 import { errorHandler } from './lib/http.js';
 import { adminRouter } from './routes/admin.js';
 import { adminFeedsRouter } from './routes/adminFeeds.js';
+import { adminAnalyticsRouter } from './routes/adminAnalytics.js';
+import { adminSettingsRouter } from './routes/adminSettings.js';
 import { alertsRouter } from './routes/alerts.js';
 import { assignmentsRouter } from './routes/assignments.js';
 import { checkinsRouter } from './routes/checkins.js';
@@ -39,6 +41,8 @@ export function createApp() {
   app.use('/roads', roadsRouter);
   app.use('/routing', routingRouter);
   app.use('/admin/feeds', adminFeedsRouter);
+  app.use('/admin/settings', adminSettingsRouter);
+  app.use('/admin/analytics', adminAnalyticsRouter);
   app.use('/admin', adminRouter);
 
   app.use((_req, res) => {

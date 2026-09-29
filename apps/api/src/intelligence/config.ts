@@ -36,14 +36,23 @@ export const TIER_BANDS = [
 /** Severity-Model §4.3 credibility per contributing signal. */
 export const CREDIBILITY = {
   official: 0.95,
+  satellite: 0.85,
   citizenTrusted: 0.55,
   citizenPhoto: 0.45,
   citizenText: 0.3,
 };
 export const OFFICIAL_SOURCES = ['usgs', 'gdacs', 'open-meteo', 'simulator'];
+export const SATELLITE_SOURCES = ['firms'];
+
+/** Minimum hazard intensity for a feed signal to open a new incident (below: map only). */
+export const MIN_H_TO_OPEN: Record<string, number> = {
+  default: 0.1,
+  // Thousands of small agricultural fires per day in season; only ≥10 MW open incidents.
+  firms: 0.35,
+};
 
 /** Confidence at which citizen-only evidence may trigger a WATCH alert (≈ 3 text reports). */
-export const WATCH_CONFIDENCE = 0.6;
+export const ALERT_POLICY = { watchConfidence: 0.6 };
 
 /**
  * Citizen reports carry no measured intensity, so H comes from the reported

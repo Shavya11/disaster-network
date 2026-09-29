@@ -8,12 +8,11 @@ import {
   CORRELATION,
   DEFAULT_DENSITY_IN_REGION,
   DEFAULT_DENSITY_OUTSIDE,
+  MIN_H_TO_OPEN,
   REGION,
 } from './config.js';
 import { contributorH, scoreIncident, type Contributor } from './severity.js';
 
-/** Minimum hazard intensity for a feed signal to open a new incident (below: map-only). */
-const MIN_H_TO_OPEN = 0.1;
 const LOCK_KEY = 72_001;
 const OPEN_STATUSES = ['REPORTED', 'VERIFIED', 'ACTIVE'];
 
@@ -90,7 +89,7 @@ export async function correlateSignals(): Promise<{ linked: number; created: num
       let incidentId = await findOpenIncident(db, s.hazard_type, s.lon, s.lat, s.occurred_at);
       if (!incidentId) {
         const { h } = contributorH({ kind: 'signal', ...s });
-        if (h < MIN_H_TO_OPEN) continue;
+        if (h < (MIN_H_TO_OPEN[s.source] ?? MIN_H_TO_OPEN.default!)) continue;
         incidentId = await createIncident(db, {
           hazard: s.hazard_type,
           title: s.title ?? `${titleCase(s.hazard_type)} detected`,

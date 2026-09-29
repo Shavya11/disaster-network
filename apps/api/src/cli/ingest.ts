@@ -1,5 +1,6 @@
 // Usage: node dist/cli/ingest.js [all | usgs | open-meteo | gdacs ...]
 import { sql } from '../lib/db.js';
+import { refreshSettings } from '../lib/settings.js';
 import { ADAPTERS, runFeeds } from '../ingestion/runner.js';
 import { correlateSignals, recomputeOpenIncidents } from '../intelligence/correlate.js';
 
@@ -12,6 +13,7 @@ if (unknown.length) {
   process.exit(2);
 }
 
+await refreshSettings();
 const results = await runFeeds(sources);
 console.table(results);
 

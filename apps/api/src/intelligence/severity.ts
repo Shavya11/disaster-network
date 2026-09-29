@@ -4,9 +4,10 @@ import {
   CREDIBILITY,
   OFFICIAL_SOURCES,
   REPORT_BASE_H,
+  SATELLITE_SOURCES,
   TIER_BANDS,
   USER_EXPOSURE_SATURATION,
-  WATCH_CONFIDENCE,
+  ALERT_POLICY,
   WEIGHTS,
 } from './config.js';
 
@@ -80,6 +81,9 @@ export function earthquakeH(mag: number, depthKm: number | null): number {
 // 40–45 °C is our assumption: above the plains threshold but departure unknown.
 export const heatH = (c: number) => bandLookup(c, [[40, 0.35], [45, 0.55], [47, 0.85]]);
 
+// §3.5 NASA FIRMS fire radiative power
+export const fireH = (mw: number) => bandLookup(mw, [[0, 0.15], [10, 0.35], [50, 0.65], [200, 0.9]]);
+
 const GDACS_LEVEL_H: Record<string, number> = { Green: 0.3, Orange: 0.6, Red: 0.9 };
 
 export function contributorH(c: Contributor): { h: number; basis: string } {
@@ -109,6 +113,9 @@ export function contributorH(c: Contributor): { h: number; basis: string } {
   if (c.hazard_type === 'HEATWAVE' && m != null) {
     return { h: heatH(m), basis: `${m} °C max temperature (IMD)` };
   }
+  if (c.hazard_type === 'WILDFIRE' && typeof p.frp_mw === 'number') {
+    return { h: fireH(p.frp_mw), basis: `${p.frp_mw} MW fire radiative power (NASA FIRMS)` };
+  }
   if (typeof p.alert_level === 'string' && p.alert_level in GDACS_LEVEL_H) {
     return { h: GDACS_LEVEL_H[p.alert_level]!, basis: `GDACS ${p.alert_level} alert` };
   }
@@ -116,7 +123,10 @@ export function contributorH(c: Contributor): { h: number; basis: string } {
 }
 
 function contributorCredibility(c: Contributor): number {
-  if (c.kind === 'signal') return OFFICIAL_SOURCES.includes(c.source) ? CREDIBILITY.official : 0.5;
+  if (c.kind === 'signal') {
+    if (SATELLITE_SOURCES.includes(c.source)) return CREDIBILITY.satellite;
+    return OFFICIAL_SOURCES.includes(c.source) ? CREDIBILITY.official : 0.5;
+  }
   if (c.reporter_trusted) return CREDIBILITY.citizenTrusted;
   return c.has_photo ? CREDIBILITY.citizenPhoto : CREDIBILITY.citizenText;
 }
@@ -195,8 +205,8 @@ export function scoreIncident(input: ScoreInput): SeverityBreakdown {
     ? ['EMERGENCY', 'verified by coordinator']
     : officialAboveThreshold
       ? ['WARNING', 'official source above threshold']
-      : C >= WATCH_CONFIDENCE
-        ? ['WATCH', `corroborated (confidence ${round(C, 2)} ≥ ${WATCH_CONFIDENCE})`]
+      : C >= ALERT_POLICY.watchConfidence
+        ? ['WATCH', `corroborated (confidence ${round(C, 2)} ≥ ${ALERT_POLICY.watchConfidence})`]
         : ['INFO', 'unverified and not corroborated'];
 
   return {

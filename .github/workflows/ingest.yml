@@ -23,6 +23,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
     steps:
       - name: Check secrets are configured
         id: check

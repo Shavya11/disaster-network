@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { earthquakeH, heatH, rainH, scoreIncident, tierForScore, windH, type Contributor } from './severity.js';
+import { earthquakeH, fireH, heatH, rainH, scoreIncident, tierForScore, windH, type Contributor } from './severity.js';
 
 const close = (actual: number, expected: number, eps = 0.005) =>
   assert.ok(Math.abs(actual - expected) <= eps, `expected ≈${expected}, got ${actual}`);
@@ -46,6 +46,13 @@ describe('hazard intensity (Severity-Model §3)', () => {
     close(earthquakeH(6.0, 150), 0.6 * 0.55);
     close(earthquakeH(7.0, 400), 0.85 * 0.3);
     assert.equal(earthquakeH(3, 5), 0.05);
+  });
+
+  it('maps FIRMS fire radiative power', () => {
+    assert.equal(fireH(5), 0.15);
+    assert.equal(fireH(30), 0.35);
+    assert.equal(fireH(120), 0.65);
+    assert.equal(fireH(250), 0.9);
   });
 
   it('maps IMD heatwave criteria', () => {
