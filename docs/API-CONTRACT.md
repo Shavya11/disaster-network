@@ -20,7 +20,15 @@ VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
 ```
 
-These are the **local** values. Production values will be shared once the cloud project is set up.
+These are the **local** values. **Production** (cloud database is live; API URL follows once deployed on Render):
+
+```
+VITE_API_URL=<Render URL, e.g. https://disaster-network-api.onrender.com>
+VITE_SUPABASE_URL=https://gzpjzmsgvictvoqgauda.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<ask the backend owner — safe to ship in the browser>
+```
+
+The production demo accounts use a different password; ask the backend owner.
 
 ### Getting the token
 
