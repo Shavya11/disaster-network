@@ -110,11 +110,16 @@ Every error response has this shape:
 | 🔜 S3 | `PATCH /incidents/:id/status` | coordinator | `{ status }` → `Incident` |
 | 🔜 S3 | `GET /incidents/:id/reports` | responder, coordinator | → `Report[]` |
 
-### Live feed signals *(S2)*
+### Live feed signals
 | | Method & path | Auth | Notes |
 |---|---|---|---|
-| 🔜 S2 | `GET /signals` | public | Raw earthquake / weather / GDACS events. Query: `bbox` `since` `source`. |
-| 🔜 S2 | `GET /admin/feeds/health` | admin | Last run, success and count per source |
+| ✅ | `GET /signals` | public | Raw events from the live feeds → `Signal[]`. Query: `bbox` `since` (default: last 3 days; ongoing events included) `source` (`usgs` \| `open-meteo` \| `gdacs`) `hazard` `limit` (≤1000). |
+| ✅ | `GET /admin/feeds/health` | coordinator, admin | → `FeedHealth[]` — last run, last error, 24 h success rate, counts per source |
+| ✅ | `POST /admin/feeds/:source/poll` | admin | "Poll now" button → `{ source, ok, fetched, inserted, updated, ms, error? }` |
+
+Useful `payload` fields for map popups: USGS → `place`, `url`, `depth_km`, `tsunami`; GDACS → `alert_level` (`Green`/`Orange`/`Red`), `country`, `severity_text`, `report_url`; Open-Meteo → `city`, `forecast_date`, `value`, `unit`.
+
+Feeds refresh every 30 minutes. Signals are raw data; in S3 they get grouped into **incidents**, which is what the main map and dashboard should focus on.
 
 ### Citizen reports *(S3)*
 | | Method & path | Auth | Notes |

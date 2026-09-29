@@ -47,6 +47,33 @@ export interface Incident {
   resolved_at: string | null;
 }
 
+/** A raw event from a public feed (USGS, Open-Meteo, GDACS). */
+export interface Signal {
+  id: number;
+  source: string;
+  source_event_id: string;
+  hazard_type: HazardType;
+  location: LatLon;
+  magnitude: number | null;
+  title: string | null;
+  occurred_at: string;
+  /** Source-specific extras, e.g. `url`, `depth_km`, `alert_level`, `city`. */
+  payload: Record<string, unknown>;
+  incident_id: string | null;
+}
+
+export interface FeedHealth {
+  source: string;
+  last_run_at: string | null;
+  last_run_ok: boolean | null;
+  last_error: string | null;
+  last_success_at: string | null;
+  runs_24h: number;
+  success_rate_24h: number | null;
+  new_signals_24h: number;
+  total_signals: number;
+}
+
 export interface GeoJSONPolygon {
   type: 'Polygon';
   coordinates: number[][][];

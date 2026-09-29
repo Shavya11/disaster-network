@@ -1,0 +1,46 @@
+name: Ingest live feeds
+
+on:
+  schedule:
+    # Every 30 min keeps a private repo inside the free 2,000 Actions minutes/month.
+    # On a public repo (unlimited minutes) this can drop to every 5-10 min.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: 'Sources to poll (space-separated, or "all")'
+        default: all
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Check secrets are configured
+        id: check
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Database secrets not configured yet; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - if: steps.check.outputs.skip != 'true'
+        run: npm ci && npm run build
+      - if: steps.check.outputs.skip != 'true'
+        env:
+          SOURCES: ${{ inputs.sources || 'all' }}
+        run: npm run ingest -- $SOURCES

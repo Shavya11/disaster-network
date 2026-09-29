@@ -6,6 +6,8 @@ import { errorHandler } from './lib/http.js';
 import { healthRouter } from './routes/health.js';
 import { incidentsRouter } from './routes/incidents.js';
 import { meRouter } from './routes/me.js';
+import { adminFeedsRouter } from './routes/adminFeeds.js';
+import { signalsRouter } from './routes/signals.js';
 
 export function createApp() {
   const app = express();
@@ -17,6 +19,8 @@ export function createApp() {
   app.use(healthRouter);
   app.use('/me', meRouter);
   app.use('/incidents', incidentsRouter);
+  app.use('/signals', signalsRouter);
+  app.use('/admin/feeds', adminFeedsRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not found' });

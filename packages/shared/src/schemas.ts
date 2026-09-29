@@ -36,6 +36,16 @@ export const listIncidentsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(200),
 });
 
+export const listSignalsQuerySchema = z.object({
+  bbox: csvNumbers(4).optional(),
+  source: z.string().max(40).optional(),
+  hazard: z.enum(HAZARD_TYPES).optional(),
+  // Defaults to the last 3 days.
+  since: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(500),
+});
+
+export type ListSignalsQuery = z.infer<typeof listSignalsQuerySchema>;
 export type UpdateLocationInput = z.infer<typeof updateLocationSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ListIncidentsQuery = z.infer<typeof listIncidentsQuerySchema>;
