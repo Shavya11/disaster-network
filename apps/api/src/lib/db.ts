@@ -6,4 +6,6 @@ export const sql = postgres(env.DATABASE_URL, {
   max: 5,
   prepare: false,
   idle_timeout: 20,
+  // PostGIS emits NOTICEs (e.g. while validating geofences); errors still throw.
+  onnotice: () => {},
 });

@@ -1,7 +1,7 @@
-import type { Sql } from 'postgres';
+import type { Sql, TransactionSql } from 'postgres';
 
 export async function audit(
-  db: Sql,
+  db: Sql | TransactionSql,
   entry: {
     actorId: string | null;
     action: string;
