@@ -12,6 +12,7 @@
     "start": "npm run start -w @dn/api",
     "typecheck": "npm run build -w @dn/shared && npm run typecheck -w @dn/api",
     "ingest": "npm run ingest -w @dn/api --",
+    "metrics": "npm run build && npm run metrics -w @dn/api",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",

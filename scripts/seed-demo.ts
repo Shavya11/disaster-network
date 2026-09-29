@@ -77,6 +77,32 @@ interface OsmElement {
   tags?: Record<string, string>;
 }
 
+// The main Overpass server is often overloaded; fall back to public mirrors.
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+
+async function overpass(query: string): Promise<{ elements: OsmElement[] }> {
+  const errors: string[] = [];
+  for (const url of OVERPASS_MIRRORS) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'disaster-network/0.1 (student project)' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: AbortSignal.timeout(90_000),
+      });
+      if (res.ok) return (await res.json()) as { elements: OsmElement[] };
+      errors.push(`${new URL(url).host}: HTTP ${res.status}`);
+    } catch (err) {
+      errors.push(`${new URL(url).host}: ${(err as Error).message}`);
+    }
+  }
+  throw new Error(errors.join('; '));
+}
+
 async function importArea(label: string, lat: number, lon: number, radiusM: number) {
   const around = `(around:${radiusM},${lat},${lon})`;
   const query = `[out:json][timeout:60];
@@ -87,14 +113,7 @@ async function importArea(label: string, lat: number, lon: number, radiusM: numb
   nwr["amenity"="community_centre"]${around};
 );
 out center 400;`;
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'disaster-network/0.1 (student project)' },
-    body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(90_000),
-  });
-  if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
-  const { elements } = (await res.json()) as { elements: OsmElement[] };
+  const { elements } = await overpass(query);
 
   let added = 0;
   for (const e of elements) {

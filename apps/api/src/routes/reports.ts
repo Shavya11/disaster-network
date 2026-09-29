@@ -10,7 +10,8 @@ import { requireAuth } from '../middleware/auth.js';
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
 
-const MAX_REPORTS_PER_HOUR = 30;
+// Above the 50-report bulk cap so a full offline queue can always sync in one go.
+const MAX_REPORTS_PER_HOUR = 60;
 const MAX_AGE_MS = 7 * 86_400_000;
 const CLOCK_SKEW_MS = 5 * 60_000;
 
@@ -32,12 +33,18 @@ function validate(input: CreateReportInput, userId: string) {
   }
 }
 
-async function enforceRateLimit(userId: string) {
-  const [row] = await sql<{ n: number }[]>`
-    select count(*)::int as n from public.reports
-    where user_id = ${userId} and received_at > now() - interval '1 hour'
+// Only reports not already received count, so re-syncing an offline queue is never blocked.
+async function enforceRateLimit(userId: string, clientIds: string[]) {
+  const [row] = await sql<{ recent: number; known: number }[]>`
+    select
+      (select count(*)::int from public.reports
+       where user_id = ${userId} and received_at > now() - interval '1 hour') as recent,
+      (select count(*)::int from public.reports where client_generated_id in ${sql(clientIds)}) as known
   `;
-  if (row!.n >= MAX_REPORTS_PER_HOUR) throw new HttpError(429, 'Too many reports; try again later');
+  const fresh = clientIds.length - row!.known;
+  if (fresh > 0 && row!.recent + fresh > MAX_REPORTS_PER_HOUR) {
+    throw new HttpError(429, 'Too many reports; try again later');
+  }
 }
 
 /** Idempotent on client_generated_id: re-sending returns the original report. */
@@ -75,7 +82,7 @@ reportsRouter.post('/', async (req, res) => {
   const input = parse(createReportSchema, req.body);
   const userId = req.user!.id;
   validate(input, userId);
-  await enforceRateLimit(userId);
+  await enforceRateLimit(userId, [input.client_generated_id]);
 
   const { id, duplicate } = await withCorrelationLock((db) => insertReport(db, input, userId));
   const [report] = await loadReports([id]);
@@ -86,7 +93,7 @@ reportsRouter.post('/', async (req, res) => {
 reportsRouter.post('/bulk', async (req, res) => {
   const { reports } = parse(bulkReportsSchema, req.body);
   const userId = req.user!.id;
-  await enforceRateLimit(userId);
+  await enforceRateLimit(userId, reports.map((r) => r.client_generated_id));
 
   const results: { client_generated_id: string; status: 'created' | 'duplicate' | 'error'; id?: string; error?: string }[] = [];
   for (const input of reports) {

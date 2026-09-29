@@ -151,27 +151,92 @@ const photo_url = supabase.storage.from('report-photos').getPublicUrl(path).data
 
 **After submitting**, show the user "Report received" and, once the linked incident is verified, "Verified by authorities" (poll `/reports/mine` or listen on the `reports` realtime channel).
 
-### Alerts *(S4)*
+### "I'm safe" check-ins
 | | Method & path | Auth | Notes |
 |---|---|---|---|
-| 🔜 S4 | `POST /alerts/preview` | coordinator | `{ geofence: GeoJSON Polygon }` → `{ recipient_count }` — show live while drawing |
-| 🔜 S4 | `POST /alerts` | coordinator | `{ incident_id?, tier, title, body, geofence, channels[] }` → `Alert` |
-| 🔜 S4 | `GET /alerts` | coordinator | All alerts with delivery counts |
-| 🔜 S4 | `GET /alerts/:id/deliveries` | coordinator | Per-recipient status |
-| 🔜 S4 | `GET /alerts/inbox` | any | Alerts the current user received |
-| 🔜 S4 | `POST /alerts/:id/acknowledge` | any | Marks the user's delivery as acknowledged |
+| ✅ | `POST /checkins` | any | `{ status: 'SAFE'\|'NEED_HELP', incident_id?, lat?, lon?, note? }` → `Checkin`. Without `lat/lon` the user's last known location is used; without `incident_id` it links to the incident whose area contains the user. |
+| ✅ | `GET /checkins/mine` | any | → `Checkin[]` |
+| ✅ | `GET /checkins/summary?incident_id=` | responder, coordinator, admin | → `CheckinSummary` (latest status per person, list of who needs help) |
 
-### Admin *(S5)*
+### Alerts (in-app)
 | | Method & path | Auth | Notes |
 |---|---|---|---|
-| 🔜 S5 | `POST /admin/simulate` | admin | `{ scenario: 'mumbai-flood' }` — runs a scripted demo |
-| 🔜 S5 | `GET /admin/audit` | admin | Paginated audit log |
-| 🔜 S5 | `GET /admin/sms-outbox` | coordinator, admin | Messages the mock SMS gateway "sent" |
-| 🔜 S5 | `GET /admin/users` · `PATCH /admin/users/:id/role` | admin | User list and role changes |
+| ✅ | `POST /alerts/preview?incident_id=` | coordinator, admin | `{ geofence }` → `AlertPreview { recipient_count, area_km2, max_tier }`. Call while the coordinator draws (debounce ~300 ms). |
+| ✅ | `POST /alerts` | coordinator, admin | `{ incident_id?, tier, title, body, geofence }` → `Alert`. **403** with `details.max_tier` if the tier exceeds what's allowed. |
+| ✅ | `GET /alerts?incident_id=` | coordinator, admin | → `Alert[]` with `recipient_count`, `acknowledged_count`, `skipped_duplicates` |
+| ✅ | `GET /alerts/:id` · `GET /alerts/:id/deliveries` | coordinator, admin | Per-recipient status |
+| ✅ | `GET /alerts/inbox` | any | → `InboxAlert[]` — the citizen's alert list |
+| ✅ | `POST /alerts/:id/acknowledge` | any | 204 — "I've seen this" button |
+
+- `geofence` is a GeoJSON **Polygon** (rings closed, `[lon, lat]`), max 25,000 km². Pre-fill it with the incident's `affected_area`.
+- **Tier limits:** with an incident → up to its `alert_permission`; without an incident → `WATCH` at most. Disable higher options in the tier picker.
+- The same person isn't alerted twice about one incident within an hour unless the tier goes up (`skipped_duplicates`).
+- Only the in-app channel is active. Email / WhatsApp / Telegram / SMS will be added later without changing these endpoints.
+- New alerts for the user arrive on the `deliveries` realtime channel → refetch `/alerts/inbox` and show a banner.
+
+### Response teams
+| | Method & path | Auth | Notes |
+|---|---|---|---|
+| ✅ | `GET /teams` | responder, coordinator, admin | → `Team[]` |
+| ✅ | `GET /teams?near_incident=<id>` | same | Available teams first, then nearest — for the "Assign team" picker (`distance_km`) |
+| ✅ | `GET /teams/mine` | responder | The responder's own team |
+| ✅ | `POST /teams` · `PATCH /teams/:id` | coordinator, admin | `{ name, type, base: {lat, lon}, member_count }` / `{ name?, status?, member_count? }` |
+| ✅ | `PUT /teams/:id/location` | team member, coordinator | `{ lat, lon }` — responder app sends position every ~30 s while on a job |
+| ✅ | `POST /teams/:id/members` · `DELETE /teams/:id/members/:userId` | coordinator, admin | `{ user_id }` (must be a RESPONDER) |
+
+### Assignments (dispatch)
+| | Method & path | Auth | Notes |
+|---|---|---|---|
+| ✅ | `POST /assignments` | coordinator, admin | `{ incident_id, team_id, instructions?, sla_minutes? }` → `Assignment`. Incident must be verified; team must be `AVAILABLE`. Default SLA: EMERGENCY 30 min, WARNING 60, WATCH 120, INFO 240. A `VERIFIED` incident becomes `ACTIVE`. |
+| ✅ | `GET /assignments?incident_id=&team_id=&status=&open=true` | coordinator, admin | → `Assignment[]` (open first, soonest deadline first) |
+| ✅ | `GET /assignments/mine` | responder | The team's jobs |
+| ✅ | `GET /assignments/:id` | team member, coordinator | |
+| ✅ | `PATCH /assignments/:id/status` | team member, coordinator | `{ status, note? }`. Order: `ASSIGNED → ACKNOWLEDGED → EN_ROUTE → ON_SCENE → COMPLETED`. Only coordinators can `CANCELLED`. 409 with `details.allowed`. |
+
+`sla_breached` is true once the team is (or would be) on scene after `sla_deadline` — show a red timer.
+
+### Resources
+| | Method & path | Auth | Notes |
+|---|---|---|---|
+| ✅ | `GET /resources?type=&lat=&lon=` | responder, coordinator, admin | → `Resource[]`; with `lat/lon`, nearest depot first |
+| ✅ | `POST /resources` · `PATCH /resources/:id` | coordinator, admin | Create stock / change total `{ quantity }` |
+| ✅ | `POST /resources/allocate` | coordinator, admin | `{ resource_id, incident_id, quantity }` — 409 if not enough available |
+| ✅ | `GET /resources/allocations?incident_id=` | responder, coordinator, admin | → `ResourceAllocation[]` |
+| ✅ | `POST /resources/allocations/:id/release` | coordinator, admin | Return stock |
+
+### Shelters & hospitals
+| | Method & path | Auth | Notes |
+|---|---|---|---|
+| ✅ | `GET /shelters/nearby?lat=&lon=&radius_km=&limit=` | public | → `Shelter[]`, open ones first, with `distance_km`, `spaces_left` |
+| ✅ | `GET /shelters?kind=` | public | All (`kind`: `shelter`, `hospital`, `community_centre`) |
+| ✅ | `POST /shelters` | coordinator, admin | |
+| ✅ | `PATCH /shelters/:id` | responder, coordinator, admin | `{ current_occupancy?, capacity?, status?, ... }`. Becomes `FULL` automatically at capacity. |
+
+Seeded from OpenStreetMap. Capacities without OSM data are estimates.
+
+### Road closures & routing
+| | Method & path | Auth | Notes |
+|---|---|---|---|
+| ✅ | `GET /roads/blocked` | public | → `BlockedRoad[]` (GeoJSON LineString) — draw in red on the map |
+| ✅ | `POST /roads/block` | coordinator, admin | `{ coordinates: [[lon, lat], ...], reason, incident_id? }` — from a drawn polyline |
+| ✅ | `POST /roads/:id/clear` | coordinator, admin | |
+| ✅ | `GET /routing/path?from=lat,lon&to=lat,lon` | any logged-in | → `RouteResult` avoiding active closures. If `blocked: true`, no clear route exists — show a warning with the route. Takes 1–5 s. |
+
+### Admin
+| | Method & path | Auth | Notes |
+|---|---|---|---|
+| ✅ | `GET /admin/users?role=&q=` | coordinator, admin | → `AdminUser[]` |
+| ✅ | `PATCH /admin/users/:id/role` | admin | `{ role }` — can't change own role |
+| ✅ | `GET /admin/audit?entity_type=&entity_id=&actor_id=&before_id=` | admin | → `AuditEntry[]`, newest first; page with `before_id` = last id |
+| ✅ | `GET /admin/analytics?days=30` | coordinator, admin | → `Analytics` (charts for the analytics page) |
+| ✅ | `GET /admin/settings` | coordinator, admin | Current value, default, and who changed it, per setting |
+| ✅ | `PUT /admin/settings/:key` · `DELETE /admin/settings/:key` | admin | Change / reset. Keys: `weather_thresholds`, `severity_weights`, `alert_policy`, `correlation`. Open incidents are rescored. |
+| ✅ | `POST /admin/simulate` | admin | `{ scenario: 'mumbai-flood' \| 'delhi-earthquake' \| 'building-collapse' }` → `SimulationResult` — demo button |
+| ✅ | `DELETE /admin/simulate` | admin | Removes all simulated data |
 
 ## 5. Realtime
 
-Subscribe directly via Supabase. Tables published: `incidents`, `reports`, `alerts`, `deliveries`. RLS applies, so each user only receives rows they're allowed to see.
+Subscribe directly via Supabase. Tables published: `incidents`, `reports`, `alerts`, `deliveries`, `teams`, `assignments`, `shelters`, `safe_checkins`, `blocked_roads`. RLS applies, so each user only receives rows they're allowed to see.
 
 ```ts
 supabase
@@ -192,7 +257,9 @@ Requires Node 24 and Docker Desktop.
 npm install
 npm run db:start          # local Supabase (first run downloads images)
 cp apps/api/.env.example apps/api/.env   # fill SUPABASE_SECRET_KEY from `npx supabase status`
-npm run seed:users
+npm run seed:users        # 4 demo logins
+npm run seed:demo         # teams, resources, shelters from OpenStreetMap
+npm run ingest            # pull live feeds once
 npm run dev               # API on http://localhost:4000
 ```
 
