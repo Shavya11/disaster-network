@@ -7,6 +7,7 @@ import { healthRouter } from './routes/health.js';
 import { incidentsRouter } from './routes/incidents.js';
 import { meRouter } from './routes/me.js';
 import { adminFeedsRouter } from './routes/adminFeeds.js';
+import { reportsRouter } from './routes/reports.js';
 import { signalsRouter } from './routes/signals.js';
 
 export function createApp() {
@@ -20,6 +21,7 @@ export function createApp() {
   app.use('/me', meRouter);
   app.use('/incidents', incidentsRouter);
   app.use('/signals', signalsRouter);
+  app.use('/reports', reportsRouter);
   app.use('/admin/feeds', adminFeedsRouter);
 
   app.use((_req, res) => {

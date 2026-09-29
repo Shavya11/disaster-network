@@ -103,12 +103,22 @@ Every error response has this shape:
 ### Incidents
 | | Method & path | Auth | Notes |
 |---|---|---|---|
-| ✅ | `GET /incidents` | public | Query: `bbox=minLon,minLat,maxLon,maxLat` `status` `hazard` `since` (ISO) `limit` (≤500). Rejected ones hidden unless `status=REJECTED`. → `Incident[]` |
+| ✅ | `GET /incidents` | public | Query: `bbox=minLon,minLat,maxLon,maxLat` `status` `hazard` `since` (ISO, on last activity) `limit` (≤500). Sorted most severe first. Rejected ones hidden unless `status=REJECTED`. → `Incident[]` |
 | ✅ | `GET /incidents/:id` | public | → `Incident` |
-| 🔜 S3 | `POST /incidents/:id/verify` | coordinator | `{ tier }` → `Incident` |
-| 🔜 S3 | `POST /incidents/:id/reject` | coordinator | `{ reason }` → `Incident` |
-| 🔜 S3 | `PATCH /incidents/:id/status` | coordinator | `{ status }` → `Incident` |
-| 🔜 S3 | `GET /incidents/:id/reports` | responder, coordinator | → `Report[]` |
+| ✅ | `GET /incidents/:id/signals` | public | Feed evidence → `Signal[]` |
+| ✅ | `GET /incidents/:id/reports` | responder, coordinator, admin | Citizen evidence → `Report[]` |
+| ✅ | `POST /incidents/:id/verify` | coordinator, admin | `{ tier?, note? }` → `Incident`. Only from `REPORTED`. `tier` optionally overrides the computed tier. |
+| ✅ | `POST /incidents/:id/reject` | coordinator, admin | `{ reason }` (min 3 chars) → `Incident` |
+| ✅ | `PATCH /incidents/:id/status` | coordinator, admin | `{ status, note? }` → `Incident`. 409 with `details.allowed` on an illegal move. |
+| ✅ | `PATCH /incidents/:id` | coordinator, admin | `{ title?, description?, tier? }` — `tier: null` removes an override |
+
+**Lifecycle:** `REPORTED` → verify → `VERIFIED` → `ACTIVE` ⇄ `CONTAINED` → `RESOLVED` (can reopen to `ACTIVE`). Reject is possible from `REPORTED`/`VERIFIED`/`ACTIVE`; a rejected incident can go back to `REPORTED`.
+
+**Two different things to display:**
+- `severity_tier` / `severity_score` = **how urgent** (colour the marker by this; never colour alone — add a label/icon).
+- `alert_permission` = **the highest tier an alert may be sent at**. `INFO` means "no alerts yet". The alert composer (S4) should cap the tier picker at this value.
+
+`severity_breakdown` explains the score (H, E, V, C, which factors applied, why permission was granted). Show it in the incident detail panel, e.g. "Score 50 = Hazard 0.60 · Exposure 1.00 · Vulnerability 0 × Confidence 0.73 — corroborated by 3 reports".
 
 ### Live feed signals
 | | Method & path | Auth | Notes |
@@ -119,17 +129,27 @@ Every error response has this shape:
 
 Useful `payload` fields for map popups: USGS → `place`, `url`, `depth_km`, `tsunami`; GDACS → `alert_level` (`Green`/`Orange`/`Red`), `country`, `severity_text`, `report_url`; Open-Meteo → `city`, `forecast_date`, `value`, `unit`.
 
-Feeds refresh every 30 minutes. Signals are raw data; in S3 they get grouped into **incidents**, which is what the main map and dashboard should focus on.
+Feeds refresh every 30 minutes. Signals are raw data; signals inside India are grouped into **incidents**, which is what the main map and dashboard should focus on.
 
-### Citizen reports *(S3)*
+### Citizen reports
 | | Method & path | Auth | Notes |
 |---|---|---|---|
-| 🔜 S3 | `POST /reports` | any | `{ client_generated_id (uuid), hazard_type, lat, lon, description?, people_affected?, photo_url?, reported_at }`. Sending the same `client_generated_id` twice is safe — returns the original. |
-| 🔜 S3 | `POST /reports/bulk` | any | `{ reports: [...] }` — flush the offline queue in one call |
-| 🔜 S3 | `GET /reports/mine` | any | → `Report[]` |
-| 🔜 S3 | Photo upload | any | Upload straight to Supabase Storage bucket `report-photos`, then send the public URL as `photo_url` |
+| ✅ | `POST /reports` | any | `{ client_generated_id (uuid), hazard_type, lat, lon, description?, people_affected?, photo_url?, reported_at (ISO) }` → `Report` with `incident_id`. **201** new, **200** if that `client_generated_id` was already received. 429 after 30 reports/hour. |
+| ✅ | `POST /reports/bulk` | any | `{ reports: [...] }` (≤50) → `{ results: [{ client_generated_id, status: 'created'\|'duplicate'\|'error', id?, error? }] }`. Remove `created` and `duplicate` from the offline queue; show `error` ones to the user. |
+| ✅ | `GET /reports/mine` | any | → `Report[]` with `incident_status` |
+| ✅ | Photo upload | any | Upload directly to Supabase Storage, see below |
 
-**Offline:** generate `client_generated_id` with `crypto.randomUUID()` when the user taps submit, store the report in IndexedDB, and retry via `/reports/bulk` when back online. Duplicates are ignored server-side.
+**Photo upload:** upload to bucket `report-photos` at path `<user id>/<any name>.jpg` (jpeg/png/webp, ≤5 MB), then send the public URL as `photo_url`. Uploads to any other folder are refused, and the API rejects photo URLs outside the user's folder.
+
+```ts
+const path = `${user.id}/${crypto.randomUUID()}.jpg`;
+await supabase.storage.from('report-photos').upload(path, file);
+const photo_url = supabase.storage.from('report-photos').getPublicUrl(path).data.publicUrl;
+```
+
+**Offline:** generate `client_generated_id` with `crypto.randomUUID()` when the user taps submit, store the report in IndexedDB, and send via `/reports/bulk` when back online. Duplicates are ignored server-side. `reported_at` must be within the last 7 days.
+
+**After submitting**, show the user "Report received" and, once the linked incident is verified, "Verified by authorities" (poll `/reports/mine` or listen on the `reports` realtime channel).
 
 ### Alerts *(S4)*
 | | Method & path | Auth | Notes |

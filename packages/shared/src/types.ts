@@ -40,11 +40,58 @@ export interface Incident {
   report_count: number;
   signal_count: number;
   confidence: number;
+  /** Highest tier an alert about this incident may be broadcast at. Separate from urgency. */
+  alert_permission: SeverityTier;
+  /** How the score was produced — show this in the incident detail panel. */
+  severity_breakdown: SeverityBreakdown | null;
+  origin: 'feed' | 'citizen';
   verified_by: string | null;
   verified_at: string | null;
+  last_activity_at: string;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+}
+
+export interface SeverityBreakdown {
+  H: number;
+  E: number;
+  V: number;
+  C: number;
+  raw: number;
+  score: number;
+  computed_tier: SeverityTier;
+  tier: SeverityTier;
+  tier_overridden: boolean;
+  weights: { hazard: number; exposure: number; vulnerability: number };
+  hazard_basis: string;
+  exposure: {
+    density_per_km2: number;
+    density_basis: string;
+    users_in_area: number;
+    from_density: number;
+    from_users: number;
+  };
+  vulnerability_factors: { factor: string; value: number }[];
+  confidence_inputs: { contributor: string; c: number }[];
+  alert_permission: SeverityTier;
+  permission_reason: string;
+}
+
+export interface Report {
+  id: string;
+  user_id: string;
+  incident_id: string | null;
+  hazard_type: HazardType;
+  location: LatLon;
+  description: string | null;
+  photo_url: string | null;
+  people_affected: number | null;
+  client_generated_id: string;
+  reported_at: string;
+  received_at: string;
+  /** Present on GET /reports/mine. */
+  incident_status?: IncidentStatus | null;
 }
 
 /** A raw event from a public feed (USGS, Open-Meteo, GDACS). */
