@@ -251,6 +251,15 @@ async function deleteSimulationData(): Promise<{ incidents: number; signals: num
          or exists (select 1 from public.reports r where r.incident_id = i.id and r.user_id in (${simUsers}))
       returning id
     `;
+    // Their assignments went with them (on delete cascade); free the teams they had tied up.
+    await tx`
+      update public.teams t set status = 'AVAILABLE'
+      where t.status = 'ASSIGNED'
+        and not exists (
+          select 1 from public.assignments a
+          where a.team_id = t.id and a.status in ('ASSIGNED', 'ACKNOWLEDGED', 'EN_ROUTE', 'ON_SCENE')
+        )
+    `;
     const closures = await tx`delete from public.blocked_roads where reason like ${TAG + '%'} returning id`;
     const signals = await tx`delete from public.raw_signals where source = ${SIM_SOURCE} returning id`;
     const reports = await tx`delete from public.reports where user_id in (${simUsers}) returning id`;

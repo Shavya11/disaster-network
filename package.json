@@ -7,17 +7,18 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w @dn/shared && npm run build -w @dn/api",
+    "build": "npm run build -w @dn/shared && npm run build -w @dn/api && npm run build -w @dn/web",
     "dev": "npm run build -w @dn/shared && npm run dev -w @dn/api",
     "start": "npm run start -w @dn/api",
-    "typecheck": "npm run build -w @dn/shared && npm run typecheck -w @dn/api",
+    "typecheck": "npm run build -w @dn/shared && npm run typecheck -w @dn/api && npm run typecheck -w @dn/web",
     "ingest": "npm run ingest -w @dn/api --",
     "metrics": "npm run build && npm run metrics -w @dn/api",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "seed:users": "node --env-file=apps/api/.env --import tsx scripts/seed-users.ts",
-    "seed:demo": "node --env-file=apps/api/.env --import tsx scripts/seed-demo.ts"
+    "seed:demo": "node --env-file=apps/api/.env --import tsx scripts/seed-demo.ts",
+    "dev:web": "npm run build -w @dn/shared && npm run dev -w @dn/web"
   },
   "devDependencies": {
     "tsx": "^4.20.0",
