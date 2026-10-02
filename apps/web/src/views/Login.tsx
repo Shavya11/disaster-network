@@ -28,11 +28,22 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  // With a demo password configured, a role card signs straight in as that demo account.
   function pickRole(r: (typeof ROLES)[number]) {
     setRole(r.key);
     setEmail(r.email);
-    if (DEMO_PASSWORD) setPassword(DEMO_PASSWORD);
     setError(null);
+    if (DEMO_PASSWORD) {
+      setPassword(DEMO_PASSWORD);
+      void signIn(r.email, DEMO_PASSWORD);
+    }
+  }
+
+  async function signIn(mail: string, pass: string) {
+    setBusy(true);
+    const res = await supabase.auth.signInWithPassword({ email: mail, password: pass });
+    setBusy(false);
+    if (res.error) setError(res.error.message === 'Invalid login credentials' ? 'Wrong email or password.' : res.error.message);
   }
 
   async function submit(e: FormEvent) {
@@ -41,14 +52,12 @@ export function Login() {
     setInfo(null);
     if (!email.trim() || !password) return setError('Enter your email and password.');
     if (mode === 'signup' && name.trim().length < 2) return setError('Enter your full name.');
+    if (mode === 'signin') return signIn(email.trim(), password);
     setBusy(true);
-    const res =
-      mode === 'signin'
-        ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        : await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim() } } });
+    const res = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim() } } });
     setBusy(false);
     if (res.error) return setError(res.error.message === 'Invalid login credentials' ? 'Wrong email or password.' : res.error.message);
-    if (mode === 'signup' && !res.data.session) setInfo('Account created. Check your email to confirm it, then sign in.');
+    if (!res.data.session) setInfo('Account created. Check your email to confirm it, then sign in.');
   }
 
   return (
@@ -69,12 +78,12 @@ export function Login() {
         <form className="login-card" onSubmit={submit}>
           <h2 className="login-heading">{mode === 'signin' ? 'Sign in' : 'Create a citizen account'}</h2>
           <p className="login-sub">
-            {mode === 'signin' ? 'Pick a demo account or enter your own email. Your role decides which console opens.' : 'Get alerts near you, report emergencies and find shelters.'}
+            {mode === 'signin' ? (DEMO_PASSWORD ? 'Tap a role to enter its demo account, or sign in with your own email.' : 'Pick a demo account or enter your own email. Your role decides which console opens.') : 'Get alerts near you, report emergencies and find shelters.'}
           </p>
           {mode === 'signin' && (
             <div className="role-card-grid">
               {ROLES.map((r) => (
-                <button key={r.key} type="button" className={`role-card${role === r.key ? ' selected' : ''}`} onClick={() => pickRole(r)}>
+                <button key={r.key} type="button" disabled={busy} className={`role-card${role === r.key ? ' selected' : ''}`} onClick={() => pickRole(r)}>
                   <r.icon size={20} />
                   <span className="role-card-name">{r.name}</span>
                   <span className="role-card-desc">{r.desc}</span>
