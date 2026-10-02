@@ -2,9 +2,8 @@ name: Ingest live feeds
 
 on:
   schedule:
-    # Every 30 min keeps a private repo inside the free 2,000 Actions minutes/month.
-    # On a public repo (unlimited minutes) this can drop to every 5-10 min.
-    - cron: '*/30 * * * *'
+    # Public repo: Actions minutes are unlimited. (A private repo would need ~30 min to stay free.)
+    - cron: '*/10 * * * *'
   workflow_dispatch:
     inputs:
       sources:

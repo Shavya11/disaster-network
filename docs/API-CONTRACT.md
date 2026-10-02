@@ -20,10 +20,10 @@ VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
 ```
 
-These are the **local** values. **Production** (cloud database is live; API URL follows once deployed on Render):
+These are the **local** values. **Production** (live):
 
 ```
-VITE_API_URL=<Render URL, e.g. https://disaster-network-api.onrender.com>
+VITE_API_URL=https://disaster-network-api.onrender.com
 VITE_SUPABASE_URL=https://gzpjzmsgvictvoqgauda.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=<ask the backend owner — safe to ship in the browser>
 ```
@@ -137,7 +137,7 @@ Every error response has this shape:
 
 Useful `payload` fields for map popups: USGS → `place`, `url`, `depth_km`, `tsunami`; GDACS → `alert_level` (`Green`/`Orange`/`Red`), `country`, `severity_text`, `report_url`; Open-Meteo → `city`, `forecast_date`, `value`, `unit`.
 
-Feeds refresh every 30 minutes. Signals are raw data; signals inside India are grouped into **incidents**, which is what the main map and dashboard should focus on.
+Feeds refresh every 10 minutes. Signals are raw data; signals inside India are grouped into **incidents**, which is what the main map and dashboard should focus on.
 
 ### Citizen reports
 | | Method & path | Auth | Notes |
@@ -272,3 +272,8 @@ npm run dev               # API on http://localhost:4000
 ```
 
 Supabase Studio (database browser): http://127.0.0.1:54323
+
+## 7. Production notes
+
+- The API runs on Render's free plan and **sleeps after 15 minutes without traffic**. The first request after that takes ~30–60 s; show a "waking up the server…" state instead of failing. Calling `GET /health` when the app opens warms it up.
+- Add your deployed frontend URL to the API's `CORS_ORIGINS` (ask the backend owner) or the browser will block requests.

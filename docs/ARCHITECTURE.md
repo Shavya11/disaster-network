@@ -13,7 +13,7 @@ flowchart LR
     end
 
     subgraph GH["GitHub Actions (free)"]
-        CRON["Scheduled ingestion<br/>every 30 min"]
+        CRON["Scheduled ingestion<br/>every 10 min"]
         CI["CI: typecheck · tests · build"]
     end
 
@@ -198,7 +198,7 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant RT as Realtime → dashboard
 
-    GA->>I: npm run ingest (every 30 min)
+    GA->>I: npm run ingest (every 10 min)
     I->>F: fetch (USGS / Open-Meteo / GDACS)
     F-->>I: events
     I->>DB: upsert raw_signals ON CONFLICT (source, source_event_id)
@@ -357,7 +357,7 @@ Enforced twice: `requireRole` in the API, and row-level security for any direct 
 |---|---|---|
 | Supabase | Free | Database, auth, storage, realtime |
 | Render | Free | API (sleeps when idle) |
-| GitHub Actions | Free (2,000 min/month private, unlimited public) | CI, scheduled ingestion |
+| GitHub Actions | Free (unlimited for public repos) | CI, scheduled ingestion |
 | USGS, Open-Meteo, GDACS, OSRM, OpenStreetMap | Free, no key | Data and routing |
 | NASA FIRMS | Free key | Optional fire feed |
 
