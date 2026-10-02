@@ -18,3 +18,24 @@ jobs:
       - run: npm run typecheck
       - run: npm test -w @dn/api
       - run: npm run build
+
+  # Render can't see pushes to this repo (its GitHub app isn't installed), so CI triggers the deploy
+  # after the build passes. Skipped when the secrets aren't set (e.g. on forks).
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy of this commit
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_SERVICE_ID" ]; then
+            echo "Render secrets not configured; skipping deploy."
+            exit 0
+          fi
+          curl -fsS -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+            -d "{\"commitId\":\"$GITHUB_SHA\"}" -o /dev/null
+          echo "Deploy of $GITHUB_SHA requested."
