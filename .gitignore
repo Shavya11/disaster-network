@@ -6,3 +6,4 @@ dist/
 *.log
 supabase/.branches
 supabase/.temp
+!apps/web/.env.production
