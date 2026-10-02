@@ -54,3 +54,11 @@ Demo accounts: `citizen@demo.dn`, `responder@demo.dn`, `coordinator@demo.dn`, `a
 Pick one on the login screen. As admin, **Admin → Scenario simulator → Surat flood** injects a scripted
 disaster; then verify, alert and dispatch it from the Coordinator Console, and follow the task as the responder.
 **Clear** removes the simulated data.
+
+### Production
+
+Web: https://rakshak-omega-two.vercel.app (Vercel, auto-deploys from `main`) · API: Render free plan.
+Render's free plan sleeps after 15 idle minutes, so a `pg_cron` job on the Supabase project (`keep-api-awake`)
+calls `/health` every 10 minutes from 08:30 to 23:30 IST. It is limited to daytime because free instance hours
+(750/month) are shared by every free service in the Render workspace. Change it with
+`select cron.alter_job((select jobid from cron.job where jobname = 'keep-api-awake'), schedule := '...')`.

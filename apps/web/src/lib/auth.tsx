@@ -1,7 +1,7 @@
 import type { Profile } from '@dn/shared';
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api } from './api';
+import { ApiError, api } from './api';
 import { supabase } from './supabase';
 
 interface AuthState {
@@ -28,11 +28,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function refreshProfile() {
-    try {
-      setProfile(await api.get<Profile>('/me'));
-      setProfileError(null);
-    } catch (e) {
-      setProfileError(e instanceof Error ? e.message : 'Could not load your profile');
+    // While the free API host is waking up it can refuse connections or answer 502/503; keep trying for ~90 s.
+    const deadline = Date.now() + 90_000;
+    for (;;) {
+      try {
+        setProfile(await api.get<Profile>('/me'));
+        setProfileError(null);
+        return;
+      } catch (e) {
+        const waking = e instanceof TypeError || (e instanceof ApiError && e.status >= 500);
+        if (!waking || Date.now() > deadline) {
+          setProfileError(e instanceof Error ? e.message : 'Could not load your profile');
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+      }
     }
   }
 

@@ -26,11 +26,21 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Trigger Render deploy of this commit
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          BEFORE: ${{ github.event.before }}
         run: |
+          # The web app deploys on Vercel; a push that only touches apps/web or docs needn't restart the API.
+          if git cat-file -e "$BEFORE" 2>/dev/null && \
+             ! git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qvE '^(apps/web/|docs/|README\.md)'; then
+            echo "Only web/docs changed; skipping API deploy."
+            exit 0
+          fi
           if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_SERVICE_ID" ]; then
             echo "Render secrets not configured; skipping deploy."
             exit 0
