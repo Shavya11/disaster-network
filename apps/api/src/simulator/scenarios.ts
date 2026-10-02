@@ -175,8 +175,14 @@ export async function runScenario(name: string, actorId: string): Promise<Simula
               ${new Date(Date.now() - Math.max(SIGNAL_LEAD_MIN, sig.minutesAgo ?? 0) * 60_000)})
     `;
   }
-  const correlation = await correlateSignals();
-  const incidentIds = new Set(correlation.incidents);
+  // Correlation also picks up any real signals waiting to be processed, so only incidents
+  // holding this run's own signals count as simulated.
+  await correlateSignals();
+  const fromSignals = await sql<{ incident_id: string }[]>`
+    select distinct incident_id from public.raw_signals
+    where source = ${SIM_SOURCE} and source_event_id like ${`${name}-${runId}-%`} and incident_id is not null
+  `;
+  const incidentIds = new Set(fromSignals.map((r) => r.incident_id));
 
   for (const [i, r] of s.reports.entries()) {
     const incidentId = await withCorrelationLock(async (db) => {
