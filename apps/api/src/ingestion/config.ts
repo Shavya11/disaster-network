@@ -28,4 +28,13 @@ export const MONITORED_CITIES = [
   { id: 'dehradun', name: 'Dehradun', lat: 30.3165, lon: 78.0322 },
   { id: 'shimla', name: 'Shimla', lat: 31.1048, lon: 77.1734 },
   { id: 'srinagar', name: 'Srinagar', lat: 34.0837, lon: 74.7973 },
+  // Gujarat (pilot region for the demo)
+  { id: 'gandhinagar', name: 'Gandhinagar', lat: 23.2156, lon: 72.6369 },
+  { id: 'vadodara', name: 'Vadodara', lat: 22.3072, lon: 73.1812 },
+  { id: 'rajkot', name: 'Rajkot', lat: 22.3039, lon: 70.8022 },
+  { id: 'bhavnagar', name: 'Bhavnagar', lat: 21.7645, lon: 72.1519 },
+  { id: 'junagadh', name: 'Junagadh', lat: 21.5222, lon: 70.4579 },
+  { id: 'porbandar', name: 'Porbandar', lat: 21.6417, lon: 69.6293 },
+  { id: 'bhuj', name: 'Bhuj', lat: 23.2420, lon: 69.6669 },
+  { id: 'palanpur', name: 'Palanpur', lat: 24.1724, lon: 72.4380 },
 ] as const;

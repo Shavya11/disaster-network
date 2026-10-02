@@ -1,6 +1,6 @@
 # Evaluation Metrics
 
-Measured 2026-09-29 11:15 UTC on the local development stack
+Measured 2026-10-02 07:38 UTC on the local development stack
 (Node v24.15.0, PostgreSQL 17 + PostGIS via Supabase CLI in Docker). Re-generate with `npm run metrics`.
 
 Metric numbering follows report §17. M2/M3 (alert delivery to devices) wait for the external
@@ -13,9 +13,9 @@ Target: < 500 ms. Method: 100,000 random points over Greater Mumbai; count point
 
 | | Execution time | Users matched |
 |---|---:|---:|
-| Without GiST index | 24.74 ms | 638 |
-| With GiST index | 0.85 ms | 638 |
-| **Speed-up** | **29.25×** | |
+| Without GiST index | 29.36 ms | 645 |
+| With GiST index | 0.88 ms | 645 |
+| **Speed-up** | **33.36×** | |
 
 Result: **PASS**
 
@@ -25,7 +25,7 @@ Target: < 2 s. Method: a browser-equivalent Supabase client subscribed (with the
 
 | Events received | Median | p95 | Max |
 |---:|---:|---:|---:|
-| 20/20 | 524.03 ms | 530.87 ms | 530.87 ms |
+| 20/20 | 527.53 ms | 565.6 ms | 565.6 ms |
 
 Result: **PASS**
 
@@ -66,8 +66,8 @@ Target: stable p95 latency under load. Method: [autocannon](https://github.com/m
 
 | Endpoint | Requests | Req/s | p50 | p97.5 | p99 | Errors |
 |---|---:|---:|---:|---:|---:|---:|
-| `GET /incidents` | 3092 | 309.2 | 318 ms | 367 ms | 374 ms | 0 |
-| `GET /signals?limit=200` | 4194 | 419.4 | 230 ms | 283 ms | 440 ms | 0 |
-| `GET /shelters/nearby?lat=19.07&lon=72.88&radius_km=5` | 15803 | 1580.3 | 61 ms | 75 ms | 84 ms | 0 |
+| `GET /incidents` | 2586 | 258.61 | 380 ms | 447 ms | 461 ms | 0 |
+| `GET /signals?limit=200` | 4220 | 422 | 224 ms | 285 ms | 473 ms | 0 |
+| `GET /shelters/nearby?lat=19.07&lon=72.88&radius_km=5` | 15337 | 1533.7 | 62 ms | 82 ms | 90 ms | 0 |
 
 Result: **PASS** (no errors, p99 < 2 s)

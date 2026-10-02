@@ -13,6 +13,7 @@ import { sql } from '../lib/db.js';
 import { HttpError, parse } from '../lib/http.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { clearSimulation, runScenario } from '../simulator/scenarios.js';
+import { fillPlaceNamesSoon } from '../lib/geocode.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth);
@@ -23,7 +24,7 @@ adminRouter.get('/users', requireRole('COORDINATOR', 'ADMIN'), async (req, res) 
   const like = q.q ? `%${q.q.replace(/[%_\\]/g, '\\$&')}%` : null;
   res.json(await sql<AdminUser[]>`
     select p.id, u.email, p.full_name, p.role, p.team_id,
-           p.last_location is not null as has_location, p.created_at
+           p.last_location is not null as has_location, u.last_sign_in_at, p.created_at
     from public.profiles p join auth.users u on u.id = p.id
     where 1 = 1
       ${q.role ? sql`and p.role = ${q.role}` : sql``}
@@ -68,6 +69,7 @@ adminRouter.get('/audit', adminOnly, async (req, res) => {
 adminRouter.post('/simulate', adminOnly, async (req, res) => {
   const { scenario } = parse(simulateSchema, req.body);
   const result = await runScenario(scenario, req.user!.id);
+  fillPlaceNamesSoon();
   await audit(sql, { actorId: req.user!.id, action: 'SIMULATION_RUN', entityType: 'simulation', entityId: scenario, after: result });
   res.status(201).json(result);
 });

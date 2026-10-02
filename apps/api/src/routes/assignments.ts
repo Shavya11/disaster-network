@@ -24,7 +24,7 @@ const SLA_MINUTES: Record<SeverityTier, number> = { EMERGENCY: 30, WARNING: 60, 
 const OPEN = ['ASSIGNED', 'ACKNOWLEDGED', 'EN_ROUTE', 'ON_SCENE'];
 
 const assignmentColumns = sql`
-  a.id, a.incident_id, a.team_id, t.name as team_name,
+  a.id, a.incident_id, 'INC-' || i.ref_no as incident_reference, i.place_name as incident_place, a.team_id, t.name as team_name, t.member_count as team_members,
   i.title as incident_title, i.hazard_type as incident_hazard, i.severity_tier as incident_tier,
   ${latLonSql('i.epicenter')} as incident_location,
   a.assigned_by, a.status, a.instructions, a.sla_deadline,

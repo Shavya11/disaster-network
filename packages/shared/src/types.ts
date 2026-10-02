@@ -28,6 +28,10 @@ export interface Profile {
 
 export interface Incident {
   id: string;
+  /** Short human-friendly reference for the control room, e.g. "INC-2043". */
+  reference: string;
+  /** e.g. "Kurla, Mumbai". Filled shortly after creation; null for a few seconds. */
+  place_name: string | null;
   hazard_type: HazardType;
   title: string;
   description: string | null;
@@ -124,6 +128,14 @@ export interface FeedHealth {
 export interface GeoJSONPolygon {
   type: 'Polygon';
   coordinates: number[][][];
+}
+
+export interface IncidentTimelineEvent {
+  at: string;
+  kind: 'created' | 'signal' | 'report' | 'status' | 'dispatch' | 'alert' | 'resource' | 'road';
+  /** Ready-to-display sentence, e.g. "Verified by R. Iyer". */
+  text: string;
+  actor: string | null;
 }
 
 export interface ApiError {

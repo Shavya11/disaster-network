@@ -4,10 +4,18 @@ import { sql } from '../lib/db.js';
 import { HttpError, parse } from '../lib/http.js';
 import { SETTINGS, defaultFor, isSettingKey, refreshSettings, type SettingKey } from '../lib/settings.js';
 import { recomputeOpenIncidents } from '../intelligence/correlate.js';
+import { ALERT_POLICY, CREDIBILITY } from '../intelligence/config.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 export const adminSettingsRouter = Router();
 adminSettingsRouter.use(requireAuth, requireRole('COORDINATOR', 'ADMIN'));
+
+/** How many independent text-only citizen reports reach this confidence (noisy-OR, c = 0.3 each). */
+function reportsForConfidence(target: number): number {
+  let n = 1;
+  while (1 - (1 - CREDIBILITY.citizenText) ** n < target && n < 50) n++;
+  return n;
+}
 
 function keyParam(raw: unknown): SettingKey {
   if (typeof raw !== 'string' || !isSettingKey(raw)) {
@@ -34,6 +42,7 @@ adminSettingsRouter.get('/', async (_req, res) => {
           overridden: meta.has(key),
           updated_at: meta.get(key)?.updated_at ?? null,
           updated_by: meta.get(key)?.updated_by_name ?? null,
+          ...(key === 'alert_policy' ? { equivalent_text_reports: reportsForConfidence(ALERT_POLICY.watchConfidence) } : {}),
         },
       ]),
     ),

@@ -19,6 +19,12 @@ const teams = [
   { name: 'Delhi Fire Service - Connaught Place', type: 'FIRE', lat: 28.6315, lon: 77.2167, members: 12 },
   { name: 'NDRF 8th Battalion - Ghaziabad', type: 'NDRF', lat: 28.6692, lon: 77.4538, members: 35 },
   { name: 'CATS Ambulance - Chandni Chowk', type: 'MEDICAL', lat: 28.6506, lon: 77.2303, members: 4 },
+  // Gujarat
+  { name: 'Surat Fire & Emergency - Rander', type: 'FIRE', lat: 21.2175, lon: 72.7960, members: 12 },
+  { name: 'SDRF Gujarat - Surat Unit', type: 'SEARCH_RESCUE', lat: 21.1702, lon: 72.8311, members: 32 },
+  { name: 'NDRF 6th Battalion - Vadodara', type: 'NDRF', lat: 22.3893, lon: 73.3550, members: 45 },
+  { name: '108 Emergency Ambulance - Surat', type: 'MEDICAL', lat: 21.1959, lon: 72.8302, members: 4 },
+  { name: 'Coast Guard Rescue - Porbandar', type: 'SEARCH_RESCUE', lat: 21.6417, lon: 69.6093, members: 26 },
 ];
 for (const t of teams) {
   await sql`
@@ -27,9 +33,9 @@ for (const t of teams) {
     on conflict (name) do nothing
   `;
 }
-// The demo responder belongs to the Kurla rescue team.
+// The demo responder belongs to the Surat SDRF unit (Gujarat is the demo region).
 await sql`
-  update public.profiles set team_id = (select id from public.teams where name = 'BMC Disaster Response - Kurla')
+  update public.profiles set team_id = (select id from public.teams where name = 'SDRF Gujarat - Surat Unit')
   where id = (select id from auth.users where email = 'responder@demo.dn')
 `;
 console.log(`Teams: ${teams.length}`);
@@ -39,15 +45,16 @@ const depots = [
   { depot: 'BMC Central Store - Parel', lat: 19.0008, lon: 72.8416 },
   { depot: 'NDRF Store - Andheri East', lat: 19.1136, lon: 72.8697 },
   { depot: 'Delhi DDMA Warehouse - Shastri Park', lat: 28.6720, lon: 77.2540 },
+  { depot: 'SMC Disaster Store - Surat', lat: 21.1800, lon: 72.8200 },
 ];
 const kit = [
-  { type: 'boat', name: 'Inflatable rescue boat', unit: 'boats', qty: [6, 10, 2] },
-  { type: 'water', name: 'Drinking water (20 L)', unit: 'cans', qty: [800, 400, 600] },
-  { type: 'food', name: 'Dry ration kit', unit: 'kits', qty: [1200, 500, 900] },
-  { type: 'medical', name: 'First-aid kit', unit: 'kits', qty: [300, 150, 250] },
-  { type: 'shelter', name: 'Family tent', unit: 'tents', qty: [150, 80, 200] },
-  { type: 'pump', name: 'Dewatering pump', unit: 'pumps', qty: [20, 8, 6] },
-  { type: 'rescue', name: 'Hydraulic cutter set', unit: 'sets', qty: [4, 6, 5] },
+  { type: 'boat', name: 'Inflatable rescue boat', unit: 'boats', qty: [6, 10, 2, 8] },
+  { type: 'water', name: 'Drinking water (20 L)', unit: 'cans', qty: [800, 400, 600, 700] },
+  { type: 'food', name: 'Dry ration kit', unit: 'kits', qty: [1200, 500, 900, 1000] },
+  { type: 'medical', name: 'First-aid kit', unit: 'kits', qty: [300, 150, 250, 200] },
+  { type: 'shelter', name: 'Family tent', unit: 'tents', qty: [150, 80, 200, 120] },
+  { type: 'pump', name: 'Dewatering pump', unit: 'pumps', qty: [20, 8, 6, 15] },
+  { type: 'rescue', name: 'Hydraulic cutter set', unit: 'sets', qty: [4, 6, 5, 3] },
 ];
 let resourceCount = 0;
 for (const [d, depot] of depots.entries()) {
@@ -142,7 +149,7 @@ out center 400;`;
   console.log(`Shelters ${label}: ${elements.length} from OSM, ${added} new`);
 }
 
-for (const [label, lat, lon] of [['Mumbai', 19.076, 72.8777], ['Delhi', 28.6448, 77.2167]] as const) {
+for (const [label, lat, lon] of [['Mumbai', 19.076, 72.8777], ['Delhi', 28.6448, 77.2167], ['Surat', 21.1702, 72.8311]] as const) {
   try {
     await importArea(label, lat, lon, 15000);
   } catch (err) {

@@ -8,6 +8,7 @@ import {
   verifyIncidentSchema,
   type Incident,
   type IncidentStatus,
+  type IncidentTimelineEvent,
   type Report,
   type Signal,
 } from '@dn/shared';
@@ -22,7 +23,7 @@ import { reportColumns } from './reports.js';
 export const incidentsRouter = Router();
 
 const incidentColumns = sql`
-  i.id, i.hazard_type, i.title, i.description, i.status,
+  i.id, 'INC-' || i.ref_no as reference, i.place_name, i.hazard_type, i.title, i.description, i.status,
   i.severity_score::float8 as severity_score, i.severity_tier,
   json_build_object('lat', st_y(i.epicenter::geometry), 'lon', st_x(i.epicenter::geometry)) as epicenter,
   st_asgeojson(i.affected_area)::json as affected_area,
@@ -89,6 +90,92 @@ incidentsRouter.get(
     res.json(rows);
   },
 );
+
+// Human-readable history for the incident detail panel.
+incidentsRouter.get(
+  '/:id/timeline',
+  requireAuth,
+  requireRole('RESPONDER', 'COORDINATOR', 'ADMIN'),
+  async (req, res) => {
+    const id = idParam(req.params.id);
+    const [inc] = await sql<{ created_at: Date; origin: string }[]>`
+      select created_at, origin from public.incidents where id = ${id}`;
+    if (!inc) throw new HttpError(404, 'Incident not found');
+
+    const [signals, reports, audits, alerts, allocations, closures] = await Promise.all([
+      sql<{ at: Date; source: string; title: string | null }[]>`
+        select ingested_at as at, source, title from public.raw_signals where incident_id = ${id}`,
+      sql<{ at: Date; reported_at: Date; has_photo: boolean; people: number | null; hazard: string }[]>`
+        select received_at as at, reported_at, photo_url is not null as has_photo,
+               people_affected as people, hazard_type as hazard
+        from public.reports where incident_id = ${id} order by received_at`,
+      sql<{ at: Date; action: string; actor: string | null; before: Record<string, unknown> | null; after: Record<string, unknown> | null; team: string | null }[]>`
+        select a.at, a.action, p.full_name as actor, a.before, a.after, t.name as team
+        from public.audit_log a
+        left join public.profiles p on p.id = a.actor_id
+        left join public.assignments s on a.entity_type = 'assignment' and s.id::text = a.entity_id
+        left join public.teams t on t.id = s.team_id
+        where (a.entity_type = 'incident' and a.entity_id = ${id})
+           or (a.entity_type = 'assignment' and s.incident_id = ${id})`,
+      sql<{ at: Date; tier: string; recipients: number; title: string; actor: string | null }[]>`
+        select a.created_at as at, a.tier, a.recipient_count as recipients, a.title, p.full_name as actor
+        from public.alerts a left join public.profiles p on p.id = a.created_by where a.incident_id = ${id}`,
+      sql<{ at: Date; quantity: number; unit: string; name: string; actor: string | null; released_at: Date | null }[]>`
+        select a.allocated_at as at, a.quantity, r.unit, r.name, p.full_name as actor, a.released_at
+        from public.resource_allocations a join public.resources r on r.id = a.resource_id
+        left join public.profiles p on p.id = a.allocated_by where a.incident_id = ${id}`,
+      sql<{ at: Date; reason: string; actor: string | null; cleared_at: Date | null }[]>`
+        select b.created_at as at, b.reason, p.full_name as actor, b.cleared_at
+        from public.blocked_roads b left join public.profiles p on p.id = b.marked_by where b.incident_id = ${id}`,
+    ]);
+
+    const events: IncidentTimelineEvent[] = [];
+    const push = (at: Date, kind: IncidentTimelineEvent['kind'], text: string, actor: string | null = null) =>
+      events.push({ at: at.toISOString(), kind, text, actor });
+
+    push(inc.created_at, 'created',
+      inc.origin === 'feed' ? 'Incident opened from official feed data' : 'Incident opened from a citizen report — awaiting verification');
+    for (const s of signals) push(s.at, 'signal', `${SOURCE_LABEL[s.source] ?? s.source}: ${s.title ?? 'signal received'}`);
+    reports.forEach((r, i) => {
+      const delayMin = Math.round((+r.at - +r.reported_at) / 60_000);
+      const parts = [i === 0 ? 'Citizen report received' : `Corroborating citizen report merged (${i + 1} total) — confidence raised`];
+      if (r.has_photo) parts.push('with photo');
+      if (r.people) parts.push(`${r.people} people affected`);
+      if (delayMin >= 2) parts.push(`submitted offline, synced ${delayMin} min later`);
+      push(r.at, 'report', parts.join(' · '));
+    });
+    for (const a of audits) push(a.at, a.action.startsWith('ASSIGNMENT') ? 'dispatch' : 'status', describeAudit(a), a.actor);
+    for (const a of alerts) push(a.at, 'alert', `${a.tier} alert sent to ${a.recipients} people — "${a.title}"`, a.actor);
+    for (const a of allocations) {
+      push(a.at, 'resource', `Allocated ${a.quantity} ${a.unit} (${a.name})`, a.actor);
+      if (a.released_at) push(a.released_at, 'resource', `Released ${a.quantity} ${a.unit} (${a.name})`);
+    }
+    for (const c of closures) {
+      push(c.at, 'road', `Road closed: ${c.reason}`, c.actor);
+      if (c.cleared_at) push(c.cleared_at, 'road', `Road reopened: ${c.reason}`);
+    }
+    events.sort((a, b) => a.at.localeCompare(b.at));
+    res.json(events);
+  },
+);
+
+const SOURCE_LABEL: Record<string, string> = {
+  usgs: 'USGS', gdacs: 'GDACS', 'open-meteo': 'Open-Meteo', firms: 'NASA FIRMS', simulator: 'Simulator',
+};
+
+function describeAudit(a: { action: string; actor: string | null; before: Record<string, unknown> | null; after: Record<string, unknown> | null; team: string | null }): string {
+  const who = a.actor ?? 'System';
+  const note = typeof a.after?.note === 'string' && a.after.note ? ` — ${a.after.note}` : '';
+  switch (a.action) {
+    case 'INCIDENT_VERIFIED': return `Verified by ${who}${note}`;
+    case 'INCIDENT_REJECTED': return `Dismissed by ${who}${a.after?.reason ? ` — ${a.after.reason}` : ''}`;
+    case 'INCIDENT_STATUS_CHANGED': return `Status ${a.before?.status ?? '?'} → ${a.after?.status ?? '?'} by ${who}${note}`;
+    case 'INCIDENT_UPDATED': return `Details updated by ${who}`;
+    case 'ASSIGNMENT_CREATED': return `${a.team ?? 'A team'} dispatched by ${who}`;
+    case 'ASSIGNMENT_STATUS_CHANGED': return `${a.team ?? 'Team'}: ${String(a.after?.status ?? '').replace('_', ' ').toLowerCase()}`;
+    default: return `${a.action.toLowerCase().replace(/_/g, ' ')} by ${who}`;
+  }
+}
 
 // ---- Coordinator actions. Every change is audited.
 

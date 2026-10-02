@@ -15,6 +15,7 @@ adminAnalyticsRouter.get('/', async (req, res) => {
 
   const [
     byStatus, byHazard, byTier, perDay, [response], [assign], [reports], feeds, [checkins],
+    [alertTotals], [deliveryStats], [verifyToAlert], alertsPerHour,
   ] = await Promise.all([
     sql<{ k: string; n: number }[]>`
       select status::text as k, count(*)::int as n from public.incidents where created_at > ${since} group by 1`,
@@ -59,6 +60,34 @@ adminAnalyticsRouter.get('/', async (req, res) => {
       select count(*) filter (where status = 'SAFE')::int as safe,
              count(*) filter (where status = 'NEED_HELP')::int as need_help
       from public.safe_checkins where created_at > ${since}`,
+    sql<{ total: number; people: number; people_today: number }[]>`
+      select count(*)::int as total, coalesce(sum(recipient_count), 0)::int as people,
+        coalesce(sum(recipient_count) filter (
+          where created_at >= (date_trunc('day', now() at time zone 'Asia/Kolkata') at time zone 'Asia/Kolkata')), 0)::int
+          as people_today
+      from public.alerts where created_at > ${since}`,
+    sql<{ delivered_pct: number | null; ack_pct: number | null }[]>`
+      select
+        round((100.0 * count(*) filter (where d.status in ('SENT', 'ACKNOWLEDGED'))
+          / nullif(count(*), 0))::numeric, 1)::float8 as delivered_pct,
+        round((100.0 * count(*) filter (where d.acknowledged_at is not null)
+          / nullif(count(*), 0))::numeric, 1)::float8 as ack_pct
+      from public.deliveries d join public.alerts a on a.id = d.alert_id
+      where a.created_at > ${since}`,
+    sql<{ median_sec: number | null }[]>`
+      select round((percentile_cont(0.5) within group (order by secs))::numeric, 1)::float8 as median_sec
+      from (
+        select extract(epoch from min(a.created_at) - i.verified_at) as secs
+        from public.incidents i
+        join public.alerts a on a.incident_id = i.id and a.created_at >= i.verified_at
+        where i.verified_at > ${since}
+        group by i.id, i.verified_at
+      ) x`,
+    sql<{ hour: string; count: number }[]>`
+      select to_char(h at time zone 'Asia/Kolkata', 'HH24:00') as hour, count(a.id)::int as count
+      from generate_series(date_trunc('hour', now()) - interval '23 hours', date_trunc('hour', now()), interval '1 hour') h
+      left join public.alerts a on date_trunc('hour', a.created_at) = h
+      group by h order by h`,
   ]);
 
   const statuses = toRecord(byStatus);
@@ -86,6 +115,15 @@ adminAnalyticsRouter.get('/', async (req, res) => {
       total: reports?.total ?? 0,
       with_photo: reports?.with_photo ?? 0,
       linked_to_verified_pct: reports?.verified_pct ?? null,
+    },
+    alerts: {
+      total: alertTotals?.total ?? 0,
+      people_alerted: alertTotals?.people ?? 0,
+      people_alerted_today: alertTotals?.people_today ?? 0,
+      delivery_rate_pct: deliveryStats?.delivered_pct ?? null,
+      acknowledged_pct: deliveryStats?.ack_pct ?? null,
+      median_verify_to_alert_sec: verifyToAlert?.median_sec ?? null,
+      per_hour: alertsPerHour,
     },
     feeds,
     checkins: checkins ?? { safe: 0, need_help: 0 },

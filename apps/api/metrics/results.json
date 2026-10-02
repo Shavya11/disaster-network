@@ -1,0 +1,41 @@
+{
+  "measured_at": "2026-10-02T07:38:17.558Z",
+  "environment": "local development stack",
+  "results": [
+    {
+      "id": "M1",
+      "label": "Find everyone in an alert zone (100,000 users)",
+      "target": "under 500 ms",
+      "value": "0.88 ms (33.36× faster with index)",
+      "pass": true
+    },
+    {
+      "id": "M4",
+      "label": "Dashboard update delay after a change",
+      "target": "under 2 s",
+      "value": "0.57 s (p95)",
+      "pass": true
+    },
+    {
+      "id": "M5",
+      "label": "Offline sync — 50 queued reports",
+      "target": "100%, no duplicates",
+      "value": "50/50 delivered, 0 duplicates",
+      "pass": true
+    },
+    {
+      "id": "M6",
+      "label": "Correctly grouping 200 synthetic reports (6 events)",
+      "target": "90% or better",
+      "value": "100%, 0 wrong merges",
+      "pass": true
+    },
+    {
+      "id": "M8",
+      "label": "Concurrent load (100 connections per endpoint)",
+      "target": "no errors, p99 under 2 s",
+      "value": "no errors, p99 under 2 s",
+      "pass": true
+    }
+  ]
+}

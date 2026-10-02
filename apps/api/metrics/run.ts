@@ -28,6 +28,7 @@ const pct = (xs: number[], p: number) => [...xs].sort((a, b) => a - b)[Math.min(
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const startedAt = new Date();
 const sections: string[] = [];
+const results: { id: string; label: string; target: string; value: string; pass: boolean }[] = [];
 
 await refreshSettings();
 const server = createApp().listen(0);
@@ -89,6 +90,10 @@ Target: < 500 ms. Method: 100,000 random points over Greater Mumbai; count point
 | **Speed-up** | **${r2(noIndex.ms / withIndex.ms)}×** | |
 
 Result: **${withIndex.ms < 500 ? 'PASS' : 'FAIL'}**`);
+  results.push({
+    id: 'M1', label: 'Find everyone in an alert zone (100,000 users)', target: 'under 500 ms',
+    value: `${r2(withIndex.ms)} ms (${r2(noIndex.ms / withIndex.ms)}× faster with index)`, pass: withIndex.ms < 500,
+  });
 
   // ------------------------------------------------------------ M4 realtime latency
   console.log('M4 realtime…');
@@ -137,6 +142,10 @@ Target: < 2 s. Method: a browser-equivalent Supabase client subscribed (with the
 | ${rtLatencies.length}/20 | ${r2(median(rtLatencies))} ms | ${r2(pct(rtLatencies, 95))} ms | ${r2(Math.max(...rtLatencies))} ms |
 
 Result: **${rtLatencies.length === 20 && pct(rtLatencies, 95) < 2000 ? 'PASS' : 'FAIL'}**`);
+  results.push({
+    id: 'M4', label: 'Dashboard update delay after a change', target: 'under 2 s',
+    value: `${r2(pct(rtLatencies, 95) / 1000)} s (p95)`, pass: rtLatencies.length === 20 && pct(rtLatencies, 95) < 2000,
+  });
 
   // ------------------------------------------------------------ M5 offline sync
   console.log('M5 offline sync…');
@@ -179,6 +188,11 @@ Target: 100 % delivered, 0 duplicates. Method: 50 reports queued offline; the co
 Rows stored: **${stored!.n}** (distinct ids ${stored!.distinct_ids}) of 50.
 
 Result: **${stored!.n === 50 && stored!.distinct_ids === 50 ? 'PASS' : 'FAIL'}**`);
+  results.push({
+    id: 'M5', label: 'Offline sync — 50 queued reports', target: '100%, no duplicates',
+    value: `${stored!.n}/50 delivered, ${stored!.n - stored!.distinct_ids} duplicates`,
+    pass: stored!.n === 50 && stored!.distinct_ids === 50,
+  });
 
   // ------------------------------------------------------------ M6 correlation accuracy
   console.log('M6 correlation…');
@@ -235,6 +249,10 @@ ${rows.map((r) => `| ${r.event} | ${r.reports} | ${r.incidents} | ${r.correct} |
 Distinct events wrongly merged into one incident: **${merged}**. Accuracy: **${r2(accuracy)} %**.
 
 Result: **${accuracy >= 90 && merged === 0 ? 'PASS' : 'FAIL'}**`);
+  results.push({
+    id: 'M6', label: 'Correctly grouping 200 synthetic reports (6 events)', target: '90% or better',
+    value: `${r2(accuracy)}%, ${merged} wrong merges`, pass: accuracy >= 90 && merged === 0,
+  });
 
   // ------------------------------------------------------------ M8 load
   console.log('M8 load…');
@@ -272,6 +290,10 @@ Target: stable p95 latency under load. Method: [autocannon](https://github.com/m
 ${loadRows.join('\n')}
 
 Result: **${loadPass ? 'PASS' : 'FAIL'}** (no errors, p99 < 2 s)`);
+  results.push({
+    id: 'M8', label: 'Concurrent load (100 connections per endpoint)', target: 'no errors, p99 under 2 s',
+    value: loadPass ? 'no errors, p99 under 2 s' : 'errors or slow responses', pass: loadPass,
+  });
 } finally {
   // ------------------------------------------------------------ cleanup
   const touched = await sql<{ incident_id: string }[]>`
@@ -303,6 +325,10 @@ scheduled job has been running in the cloud; M9/M10 are measured on the frontend
 ${sections.join('\n\n')}
 `;
 writeFileSync(new URL('../../../docs/METRICS.md', import.meta.url), doc);
+writeFileSync(
+  new URL('./results.json', import.meta.url),
+  `${JSON.stringify({ measured_at: new Date().toISOString(), environment: 'local development stack', results }, null, 2)}\n`,
+);
 console.log(doc);
 await sql.end();
 process.exit(0);

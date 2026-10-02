@@ -6,6 +6,7 @@ import { sql } from '../lib/db.js';
 import { HttpError, parse } from '../lib/http.js';
 import { correlateReport, withCorrelationLock } from '../intelligence/correlate.js';
 import { requireAuth } from '../middleware/auth.js';
+import { fillPlaceNamesSoon } from '../lib/geocode.js';
 
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
@@ -86,6 +87,7 @@ reportsRouter.post('/', async (req, res) => {
 
   const { id, duplicate } = await withCorrelationLock((db) => insertReport(db, input, userId));
   const [report] = await loadReports([id]);
+  if (!duplicate) fillPlaceNamesSoon();
   res.status(duplicate ? 200 : 201).json(report);
 });
 
@@ -107,6 +109,7 @@ reportsRouter.post('/bulk', async (req, res) => {
       results.push({ client_generated_id: input.client_generated_id, status: 'error', error: message });
     }
   }
+  fillPlaceNamesSoon();
   res.json({ results });
 });
 

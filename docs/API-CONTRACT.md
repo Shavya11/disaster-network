@@ -114,6 +114,7 @@ Every error response has this shape:
 | ✅ | `GET /incidents` | public | Query: `bbox=minLon,minLat,maxLon,maxLat` `status` `hazard` `since` (ISO, on last activity) `limit` (≤500). Sorted most severe first. Rejected ones hidden unless `status=REJECTED`. → `Incident[]` |
 | ✅ | `GET /incidents/:id` | public | → `Incident` |
 | ✅ | `GET /incidents/:id/signals` | public | Feed evidence → `Signal[]` |
+| ✅ | `GET /incidents/:id/timeline` | responder, coordinator, admin | → `IncidentTimelineEvent[]` — ready-made sentences for the detail panel's "Audit trail" (reports merged, offline sync delay, verified by, team dispatched, alerts, closures) |
 | ✅ | `GET /incidents/:id/reports` | responder, coordinator, admin | Citizen evidence → `Report[]` |
 | ✅ | `POST /incidents/:id/verify` | coordinator, admin | `{ tier?, note? }` → `Incident`. Only from `REPORTED`. `tier` optionally overrides the computed tier. |
 | ✅ | `POST /incidents/:id/reject` | coordinator, admin | `{ reason }` (min 3 chars) → `Incident` |
@@ -197,7 +198,7 @@ const photo_url = supabase.storage.from('report-photos').getPublicUrl(path).data
 |---|---|---|---|
 | ✅ | `POST /assignments` | coordinator, admin | `{ incident_id, team_id, instructions?, sla_minutes? }` → `Assignment`. Incident must be verified; team must be `AVAILABLE`. Default SLA: EMERGENCY 30 min, WARNING 60, WATCH 120, INFO 240. A `VERIFIED` incident becomes `ACTIVE`. |
 | ✅ | `GET /assignments?incident_id=&team_id=&status=&open=true` | coordinator, admin | → `Assignment[]` (open first, soonest deadline first) |
-| ✅ | `GET /assignments/mine` | responder | The team's jobs |
+| ✅ | `GET /assignments/mine` | responder | The team's jobs. Each `Assignment` includes `incident_reference`, `incident_place`, `team_members` |
 | ✅ | `GET /assignments/:id` | team member, coordinator | |
 | ✅ | `PATCH /assignments/:id/status` | team member, coordinator | `{ status, note? }`. Order: `ASSIGNED → ACKNOWLEDGED → EN_ROUTE → ON_SCENE → COMPLETED`. Only coordinators can `CANCELLED`. 409 with `details.allowed`. |
 
@@ -233,14 +234,40 @@ Seeded from OpenStreetMap. Capacities without OSM data are estimates.
 ### Admin
 | | Method & path | Auth | Notes |
 |---|---|---|---|
-| ✅ | `GET /admin/users?role=&q=` | coordinator, admin | → `AdminUser[]` |
+| ✅ | `GET /admin/users?role=&q=` | coordinator, admin | → `AdminUser[]` (includes `last_sign_in_at` for "Last active") |
 | ✅ | `PATCH /admin/users/:id/role` | admin | `{ role }` — can't change own role |
 | ✅ | `GET /admin/audit?entity_type=&entity_id=&actor_id=&before_id=` | admin | → `AuditEntry[]`, newest first; page with `before_id` = last id |
-| ✅ | `GET /admin/analytics?days=30` | coordinator, admin | → `Analytics` (charts for the analytics page) |
+| ✅ | `GET /admin/analytics?days=30` | coordinator, admin | → `Analytics` — KPI cards and charts. `alerts` has people alerted (today and total), delivery and acknowledgement rates, median verify→alert seconds, and `per_hour` for the last 24 h |
+| ✅ | `GET /admin/metrics` | coordinator, admin | → `MetricsReport` — **real** success metrics: benchmarks (M1, M4, M5, M6, M8) plus live values (M2, M3, M7). `pass: null` = not enough data yet |
 | ✅ | `GET /admin/settings` | coordinator, admin | Current value, default, and who changed it, per setting |
-| ✅ | `PUT /admin/settings/:key` · `DELETE /admin/settings/:key` | admin | Change / reset. Keys: `weather_thresholds`, `severity_weights`, `alert_policy`, `correlation`. Open incidents are rescored. |
-| ✅ | `POST /admin/simulate` | admin | `{ scenario: 'mumbai-flood' \| 'delhi-earthquake' \| 'building-collapse' }` → `SimulationResult` — demo button |
+| ✅ | `PUT /admin/settings/:key` · `DELETE /admin/settings/:key` | admin | Change / reset. Keys: `weather_thresholds`, `severity_weights`, `alert_policy`, `incident_rules` (`earthquakeMinMagnitude`), `correlation`. Open incidents are rescored. `alert_policy` also returns `equivalent_text_reports` for an "≈ N reports" label. |
+| ✅ | `POST /admin/simulate` | admin | `{ scenario: 'surat-flood' \| 'mumbai-flood' \| 'delhi-earthquake' \| 'building-collapse' }` → `SimulationResult` — demo button. `surat-flood` follows the prototype's story |
 | ✅ | `DELETE /admin/simulate` | admin | Removes all simulated data |
+
+## 4a. UI labels (prototype → data)
+
+The RAKSHAK prototype (`docs/prototype/rakshak-dashboard.html`) uses friendlier words. Map them like this:
+
+| Prototype shows | Data |
+|---|---|
+| `INC-2043` | `incident.reference` |
+| Place tag "Surat" | `incident.place_name` (null for a few seconds after creation) |
+| UNVERIFIED | status `REPORTED` and origin `citizen`, or `alert_permission` WARNING |
+| MONITORING | status `REPORTED`, origin `feed`, `alert_permission` INFO or WATCH |
+| VERIFIED | `VERIFIED`, `ACTIVE`, `CONTAINED` |
+| RESOLVED / DISMISSED | `RESOLVED` / `REJECTED` |
+| Advisory / Watch / Warning / Emergency | `severity_tier` INFO / WATCH / WARNING / EMERGENCY |
+| "Supported by N independent reports" | `report_count` |
+| "Verify & Alert" button | `POST /incidents/:id/verify`, then open the alert composer pre-filled with `affected_area`, tier capped at `alert_permission` |
+| Task: On the way / Arrived / Completed | assignment `EN_ROUTE` / `ON_SCENE` / `COMPLETED` (`ASSIGNED` = new, `ACKNOWLEDGED` = accepted) |
+| Task: Standby | team `AVAILABLE` with no open assignment |
+| Personnel | `assignment.team_members` / `team.member_count` |
+| "Route avoids NH-48" | `GET /routing/path`; list reasons from `GET /roads/blocked` |
+| Data source cards | `GET /admin/feeds/health` (USGS, Open-Meteo, GDACS; NASA FIRMS when its key is set). ReliefWeb is not integrated — don't show it |
+| Success metrics | `GET /admin/metrics` — never hard-code numbers |
+| Threshold sliders | `GET` / `PUT /admin/settings` |
+| Audit trail per incident | `GET /incidents/:id/timeline` |
+| Bell badge | unacknowledged items in `GET /alerts/inbox` |
 
 ## 5. Realtime
 

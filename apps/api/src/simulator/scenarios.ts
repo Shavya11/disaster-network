@@ -26,8 +26,14 @@ interface SimReport {
   lon: number;
   description: string;
   people?: number;
+  /** When the server received it. */
   minutesAgo: number;
+  /** Written this long before it reached the server (queued on the phone with no signal). */
+  offlineMinutes?: number;
 }
+
+/** Simulated feed data "arrived" this long ago, before the citizen reports. */
+const SIGNAL_LEAD_MIN = 40;
 interface Scenario {
   signals: SimSignal[];
   reports: SimReport[];
@@ -61,6 +67,32 @@ const SCENARIOS: Record<string, Scenario> = {
     ],
     closures: [
       { coordinates: [[72.8791, 19.0716], [72.8812, 19.0751], [72.8836, 19.0789]], reason: `${TAG} LBS Marg flooded near Kurla` },
+    ],
+  },
+  // Matches the RAKSHAK prototype story: Tapi basin flood, an offline SOS, a collapse on Ring Road, NH-48 closed.
+  'surat-flood': {
+    centre: { lat: 21.195, lon: 72.81 },
+    signals: [118, 165, 212].map((mm, day) => ({
+      hazard: 'FLOOD',
+      lat: 21.1702,
+      lon: 72.8311,
+      magnitude: mm,
+      forecastDay: day,
+      title: `${TAG} Heavy rain forecast in Surat (Tapi basin): ${mm} mm`,
+      payload: { unit: 'mm', city: 'Surat', value: mm, forecast_date: istDate(day) },
+    })),
+    reports: [
+      { hazard: 'FLOOD', lat: 21.2045, lon: 72.7905, description: 'Tapi water entering homes in Adajan', people: 15, minutesAgo: 30 },
+      // Submitted with no network; the timeline shows it synced later.
+      { hazard: 'FLOOD', lat: 21.2189, lon: 72.7963, description: 'SOS — trapped on first floor, water rising', people: 6, minutesAgo: 3, offlineMinutes: 19 },
+      { hazard: 'FLOOD', lat: 21.2240, lon: 72.8310, description: 'Katargam main road under water', minutesAgo: 14 },
+      { hazard: 'FLOOD', lat: 21.1985, lon: 72.8120, description: 'Riverfront walkway submerged, people stranded', people: 20, minutesAgo: 8 },
+      { hazard: 'BUILDING_COLLAPSE', lat: 21.1880, lon: 72.8290, description: 'Wall collapsed onto Ring Road', people: 4, minutesAgo: 12 },
+      { hazard: 'BUILDING_COLLAPSE', lat: 21.1884, lon: 72.8296, description: 'Debris blocking Ring Road, two cars hit', minutesAgo: 10 },
+      { hazard: 'BUILDING_COLLAPSE', lat: 21.1877, lon: 72.8285, description: 'Old building wall down near Ring Road', minutesAgo: 9 },
+    ],
+    closures: [
+      { coordinates: [[72.9505, 21.2690], [72.9600, 21.2540], [72.9700, 21.2390]], reason: `${TAG} NH-48 near Kamrej — flooded, avoid` },
     ],
   },
   'delhi-earthquake': {
@@ -134,11 +166,13 @@ export async function runScenario(name: string, actorId: string): Promise<Simula
       ? new Date(`${istDate(sig.forecastDay)}T00:00:00+05:30`)
       : new Date(Date.now() - (sig.minutesAgo ?? 0) * 60_000);
     await sql`
-      insert into public.raw_signals (source, source_event_id, hazard_type, location, magnitude, title, occurred_at, payload)
+      insert into public.raw_signals
+        (source, source_event_id, hazard_type, location, magnitude, title, occurred_at, payload, ingested_at)
       values (${SIM_SOURCE}, ${`${name}-${runId}-${i}`}, ${sig.hazard},
               st_setsrid(st_makepoint(${sig.lon}, ${sig.lat}), 4326)::geography,
               ${sig.magnitude}, ${sig.title}, ${occurredAt},
-              ${sql.json({ ...sig.payload, simulated: true, scenario: name } as never)})
+              ${sql.json({ ...sig.payload, simulated: true, scenario: name } as never)},
+              ${new Date(Date.now() - Math.max(SIGNAL_LEAD_MIN, sig.minutesAgo ?? 0) * 60_000)})
     `;
   }
   const correlation = await correlateSignals();
@@ -148,10 +182,11 @@ export async function runScenario(name: string, actorId: string): Promise<Simula
     const incidentId = await withCorrelationLock(async (db) => {
       const [row] = await db<{ id: string }[]>`
         insert into public.reports
-          (user_id, hazard_type, location, description, people_affected, client_generated_id, reported_at)
+          (user_id, hazard_type, location, description, people_affected, client_generated_id, reported_at, received_at)
         values (${users[i % users.length]!}, ${r.hazard},
                 st_setsrid(st_makepoint(${r.lon}, ${r.lat}), 4326)::geography,
                 ${`${TAG} ${r.description}`}, ${r.people ?? null}, ${randomUUID()},
+                ${new Date(Date.now() - (r.minutesAgo + (r.offlineMinutes ?? 0)) * 60_000)},
                 ${new Date(Date.now() - r.minutesAgo * 60_000)})
         returning id
       `;
@@ -169,10 +204,15 @@ export async function runScenario(name: string, actorId: string): Promise<Simula
     `;
   }
 
-  // Incidents opened by the simulator are labelled so nobody mistakes them for real events.
+  // Incidents opened by the simulator are labelled so nobody mistakes them for real events,
+  // and backdated to their first evidence so the timeline reads in order.
   await sql`
-    update public.incidents set title = ${TAG} || ' ' || title
-    where id in ${sql([...incidentIds])} and title not like ${TAG + '%'}
+    update public.incidents i set
+      title = case when i.title like ${TAG + '%'} then i.title else ${TAG} || ' ' || i.title end,
+      created_at = least(i.created_at,
+        coalesce((select min(s.ingested_at) from public.raw_signals s where s.incident_id = i.id), i.created_at),
+        coalesce((select min(r.received_at) from public.reports r where r.incident_id = i.id), i.created_at))
+    where i.id in ${sql([...incidentIds])}
   `;
 
   return {

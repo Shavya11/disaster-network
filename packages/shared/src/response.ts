@@ -73,8 +73,12 @@ export const updateAssignmentStatusSchema = z.object({
 export interface Assignment {
   id: string;
   incident_id: string;
+  /** e.g. "INC-2043" */
+  incident_reference: string;
+  incident_place: string | null;
   team_id: string;
   team_name: string;
+  team_members: number;
   incident_title: string;
   incident_hazard: HazardType;
   incident_tier: SeverityTier;
@@ -263,7 +267,7 @@ export const auditQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 export const simulateSchema = z.object({
-  scenario: z.enum(['mumbai-flood', 'delhi-earthquake', 'building-collapse']),
+  scenario: z.enum(['surat-flood', 'mumbai-flood', 'delhi-earthquake', 'building-collapse']),
 });
 
 export interface AdminUser {
@@ -273,6 +277,8 @@ export interface AdminUser {
   role: UserRole;
   team_id: string | null;
   has_location: boolean;
+  /** Last login, for the "Last active" column. */
+  last_sign_in_at: string | null;
   created_at: string;
 }
 
@@ -382,6 +388,36 @@ export interface Analytics {
     sla_met_pct: number | null;
   };
   reports: { total: number; with_photo: number; linked_to_verified_pct: number | null };
+  alerts: {
+    total: number;
+    people_alerted: number;
+    /** Since midnight IST. */
+    people_alerted_today: number;
+    /** Deliveries that reached the user's inbox (in-app is immediate; external channels will vary). */
+    delivery_rate_pct: number | null;
+    acknowledged_pct: number | null;
+    /** Median seconds from coordinator verification to the first alert for that incident. */
+    median_verify_to_alert_sec: number | null;
+    /** Last 24 hours, oldest first. */
+    per_hour: { hour: string; count: number }[];
+  };
   feeds: { source: string; runs: number; success_pct: number | null; signals: number }[];
   checkins: { safe: number; need_help: number };
+}
+
+// ---------------------------------------------------------------- success metrics (report §17)
+export interface MetricResult {
+  id: string;
+  label: string;
+  target: string;
+  value: string;
+  /** null = not enough data yet. */
+  pass: boolean | null;
+}
+
+export interface MetricsReport {
+  /** Benchmarks from `npm run metrics` (M1, M4, M5, M6, M8). */
+  measured: { measured_at: string; environment: string; results: MetricResult[] } | null;
+  /** Computed from the live database on each request (M2, M3, M7). */
+  live: MetricResult[];
 }

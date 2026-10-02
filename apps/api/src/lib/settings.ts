@@ -3,7 +3,7 @@
 import { HAZARD_TYPES } from '@dn/shared';
 import { z } from 'zod';
 import { WEATHER_THRESHOLDS } from '../ingestion/config.js';
-import { ALERT_POLICY, CORRELATION, WEIGHTS } from '../intelligence/config.js';
+import { ALERT_POLICY, CORRELATION, INCIDENT_RULES, WEIGHTS } from '../intelligence/config.js';
 import { sql } from './db.js';
 
 const correlationEntry = z.object({
@@ -38,6 +38,11 @@ export const SETTINGS = {
     target: ALERT_POLICY,
     schema: z.object({ watchConfidence: z.number().min(0.3).max(0.99) }),
     description: 'Confidence at which citizen-only evidence may trigger a WATCH alert',
+  },
+  incident_rules: {
+    target: INCIDENT_RULES,
+    schema: z.object({ earthquakeMinMagnitude: z.number().min(2.5).max(8) }),
+    description: 'Smallest earthquake that opens an incident (smaller ones stay on the map only)',
   },
   correlation: {
     target: CORRELATION,

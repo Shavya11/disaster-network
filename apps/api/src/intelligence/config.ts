@@ -81,9 +81,14 @@ export const CITY_DENSITY: Record<string, number> = {
   lucknow: 7900, patna: 11000, bhopal: 4000, nagpur: 11000, bhubaneswar: 6000,
   visakhapatnam: 3000, guwahati: 5000, kochi: 7000, thiruvananthapuram: 5300,
   dehradun: 3700, shimla: 5000, srinagar: 4800,
+  gandhinagar: 1200, vadodara: 9000, rajkot: 9000, bhavnagar: 5000, junagadh: 4000,
+  porbandar: 4000, bhuj: 2500, palanpur: 3000,
 };
 export const CITY_RADIUS_KM = 25;
 export const DEFAULT_DENSITY_IN_REGION = 460; // India national average
 export const DEFAULT_DENSITY_OUTSIDE = 60; // world land average
 /** Registered users in the area at which user-based exposure saturates. */
 export const USER_EXPOSURE_SATURATION = 1000;
+
+/** Rules for when a feed signal opens a new incident (admin-editable). */
+export const INCIDENT_RULES = { earthquakeMinMagnitude: 4.0 };

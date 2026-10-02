@@ -8,6 +8,7 @@ import {
   CORRELATION,
   DEFAULT_DENSITY_IN_REGION,
   DEFAULT_DENSITY_OUTSIDE,
+  INCIDENT_RULES,
   MIN_H_TO_OPEN,
   REGION,
 } from './config.js';
@@ -89,7 +90,10 @@ export async function correlateSignals(): Promise<{ linked: number; created: num
       let incidentId = await findOpenIncident(db, s.hazard_type, s.lon, s.lat, s.occurred_at);
       if (!incidentId) {
         const { h } = contributorH({ kind: 'signal', ...s });
-        if (h < (MIN_H_TO_OPEN[s.source] ?? MIN_H_TO_OPEN.default!)) continue;
+        const opens = s.hazard_type === 'EARTHQUAKE' && s.magnitude != null
+          ? s.magnitude >= INCIDENT_RULES.earthquakeMinMagnitude
+          : h >= (MIN_H_TO_OPEN[s.source] ?? MIN_H_TO_OPEN.default!);
+        if (!opens) continue;
         incidentId = await createIncident(db, {
           hazard: s.hazard_type,
           title: s.title ?? `${titleCase(s.hazard_type)} detected`,
