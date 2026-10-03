@@ -29,6 +29,15 @@ scripts/           Demo data seeding
 
 ## Run locally
 
+**Quickest — against the production database (no Docker):** needs the git-ignored `apps/api/.env.production`.
+
+```bash
+npm install
+npm run local          # API on :4000 + web app on http://localhost:5173 — one click per demo role
+```
+
+**Fully offline — local database in Docker:**
+
 Requires Node 24 and Docker Desktop.
 
 ```bash

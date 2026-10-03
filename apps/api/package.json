@@ -10,7 +10,8 @@
     "ingest": "node --env-file-if-exists=.env dist/cli/ingest.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "metrics": "node --env-file=.env --import tsx metrics/run.ts",
-    "test":"node --import tsx --test \"src/**/*.test.ts\""
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "dev:prod": "node --env-file=.env.production --import tsx --watch src/index.ts"
   },
   "dependencies": {
     "@dn/shared": "*",

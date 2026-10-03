@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:prod": "vite --mode prodlocal"
   },
   "dependencies": {
     "@dn/shared": "*",

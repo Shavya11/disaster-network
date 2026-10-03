@@ -18,7 +18,8 @@
     "db:reset": "supabase db reset",
     "seed:users": "node --env-file=apps/api/.env --import tsx scripts/seed-users.ts",
     "seed:demo": "node --env-file=apps/api/.env --import tsx scripts/seed-demo.ts",
-    "dev:web": "npm run build -w @dn/shared && npm run dev -w @dn/web"
+    "dev:web": "npm run build -w @dn/shared && npm run dev -w @dn/web",
+    "local": "npm run build -w @dn/shared && node scripts/local.mjs"
   },
   "devDependencies": {
     "tsx": "^4.20.0",
